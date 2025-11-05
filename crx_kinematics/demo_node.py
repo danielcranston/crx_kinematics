@@ -349,7 +349,18 @@ class CRXRobot:
             for q in np.linspace(0, 2 * np.pi, 360)
         ]
 
-        return T_R0_tool, O6, O5, circle_evaluations
+        sample_signal_up, sample_signal_down = zip(
+            *[(ce.dot_product_up, ce.dot_product_down) for ce in circle_evaluations]
+        )
+
+        zeros = []
+        for i in range(1, len(sample_signal_down)):
+            if np.sign(sample_signal_down[i - 1]) != np.sign(sample_signal_down[i]):
+                zeros.append(i)
+            if np.sign(sample_signal_up[i - 1]) != np.sign(sample_signal_up[i]):
+                zeros.append(i)
+
+        return T_R0_tool, O6, O5, circle_evaluations, sample_signal_up, sample_signal_down, zeros
 
 
 class DemoNode(Node):
@@ -392,16 +403,12 @@ class DemoNode(Node):
 
         ### IK ###
 
-        T_R0_tool, O6, O5, circle_evaluations = self.robot.ik(
-            [80.321, 287.676, 394.356, -131.819, -45.268, 61.453]
+        T_R0_tool, O6, O5, circle_evaluations, sample_signal_up, sample_signal_down, zeros = (
+            self.robot.ik([80.321, 287.676, 394.356, -131.819, -45.268, 61.453])
         )
 
         i = 360 * (time.time() % 4) / 4
         ce = circle_evaluations[int(i)]
-
-        sample_signal_up, sample_signal_down = zip(
-            *[(ce.dot_product_up, ce.dot_product_down) for ce in circle_evaluations]
-        )
 
         fig, ax = plt.subplots()
         x = np.linspace(0, 2 * np.pi, 360)
@@ -409,6 +416,8 @@ class DemoNode(Node):
         ax.plot(x, sample_signal_down, color="b", label="Z5Z4DOWN")
         ax.axhline(y=0.0, color="black", linestyle="-")
         ax.axvline(x=np.radians(i), color="black", linestyle="-")
+        for z in zeros:
+            ax.axvline(x=circle_evaluations[z].q, color="black", linestyle="--")
         ax.set_title("Figure 7: Sample signal dot products")
         ax.legend()
         fig.canvas.draw()
