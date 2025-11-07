@@ -218,6 +218,40 @@ class CircleEvaluation:
         self.dot_product_up = self.Z4UP @ self.Z5
         self.dot_product_down = self.Z4DOWN @ self.Z5
 
+    def determine_joint_values(self, dh_params, O5, O6, fk, T_R0_tool):
+        J1 = np.atan2(self.O4[1], self.O4[0])
+        rclpy.logging.get_logger("try").info(f"J1={np.degrees(J1)}")
+
+        T_L1_L0 = isometry_inv(dh_params[0].T(J1))
+        R_L1_L0 = T_L1_L0[:3, :3]
+        O_1_3 = R_L1_L0 @ self.O3UP
+        J2 = -np.atan2(O_1_3[2], O_1_3[0]) + np.pi / 2
+        rclpy.logging.get_logger("try").info(f"J2={np.degrees(J2)}")
+
+        O_1_4 = R_L1_L0 @ self.O4
+        J3 = np.atan2(O_1_4[2] - O_1_3[2], O_1_4[0] - O_1_3[0])
+        rclpy.logging.get_logger("try").info(f"J3={np.degrees(J3)}")
+
+        O_1_5 = R_L1_L0 @ O5
+        O4O5_dir = O_1_5 - O_1_4
+        J4 = np.atan2(O4O5_dir[2], -O4O5_dir[1])
+        rclpy.logging.get_logger("try").info(f"J4={np.degrees(J4)}")
+
+        T_R0_L4 = fk([np.degrees(j) for j in [J1, J2, J3, J4, 0, 0]], up_to=4)
+
+        O_4_6 = isometry_inv(T_R0_L4) @ [*O6, 1.0]
+        J5 = np.atan2(O_4_6[0], -O_4_6[2])
+        rclpy.logging.get_logger("try").info(f"J5={np.degrees(J5)}")
+
+        T_R0_L5 = T_R0_L4 @ dh_params[4].T(J5)
+        T_L5_tool = isometry_inv(T_R0_L5) @ T_R0_tool
+
+        J6 = np.atan2(-T_L5_tool[2, 0], T_L5_tool[0, 0])
+        rclpy.logging.get_logger("try").info(f"J6={np.degrees(J6)}")
+
+        solution = [J1, J2, J3, J4, J5, J6]
+        return solution
+
     def markers(self, frame_id="R0"):
         markers = [
             Marker(
@@ -284,7 +318,7 @@ class CRXRobot:
         r: float = 0.0
         theta: float = 0.0
 
-        def T(self, joint_value=0):
+        def T(self, joint_value=0):  # in radians
             a, alpha, r, theta = self.a, self.alpha, self.r, self.theta
 
             theta = joint_value + self.theta
@@ -316,7 +350,8 @@ class CRXRobot:
     def __init__(self):
         pass
 
-    def fk(self, joint_values=None, return_individual_transforms=False):
+    def fk(self, joint_values=None, return_individual_transforms=False, up_to=7):
+        # Joint values in degrees
 
         if num_values := len(joint_values) != 6:
             raise RuntimeError(f"Received {len(num_values)} joint values for FK, but expected 6")
@@ -332,7 +367,7 @@ class CRXRobot:
         T_list.append(self.T_L6_tool)
 
         T_R0_tool = T_list[0].copy()
-        for i, T in enumerate(T_list[1:]):
+        for i, T in enumerate(T_list[1:up_to]):
             T_R0_tool = T_R0_tool @ T
 
         if return_individual_transforms:
@@ -361,7 +396,20 @@ class CRXRobot:
             if np.sign(sample_signal_up[i - 1]) != np.sign(sample_signal_up[i]):
                 zeros.append(i)
 
-        return T_R0_tool, O6, O5, circle_evaluations, sample_signal_up, sample_signal_down, zeros
+        ik_sol = circle_evaluations[zeros[3]].determine_joint_values(
+            self.dh_params, O5, O6, self.fk, T_R0_tool
+        )
+
+        return (
+            T_R0_tool,
+            O6,
+            O5,
+            circle_evaluations,
+            sample_signal_up,
+            sample_signal_down,
+            zeros,
+            [np.degrees(J) for J in ik_sol],
+        )
 
 
 class DemoNode(Node):
@@ -383,6 +431,7 @@ class DemoNode(Node):
         # joint_values = [0, round(float(angle), 3), 0, 0, 0, 0]
 
         joint_values = [+78, -41, +17, -42, -60, +10]  # Eq 10
+        # joint_values = [0] * 6
         self.get_logger().info(f" {joint_values=}")
 
         ### FK ###
@@ -404,9 +453,18 @@ class DemoNode(Node):
 
         ### IK ###
 
-        T_R0_tool, O6, O5, circle_evaluations, sample_signal_up, sample_signal_down, zeros = (
-            self.robot.ik(xyzwpr)  # [80.321, 287.676, 394.356, -131.819, -45.268, 61.453])
-        )
+        (
+            T_R0_tool,
+            O6,
+            O5,
+            circle_evaluations,
+            sample_signal_up,
+            sample_signal_down,
+            zeros,
+            ik_sol,
+        ) = self.robot.ik(
+            xyzwpr
+        )  # [80.321, 287.676, 394.356, -131.819, -45.268, 61.453])
 
         i = 360 * (time.time() % 4) / 4
         ce = circle_evaluations[int(i)]
@@ -435,9 +493,25 @@ class DemoNode(Node):
 
         self.plot_image_publisher.publish(CvBridge().cv2_to_imgmsg(image_array))
 
-        self.get_logger().info(f"{ce.dot_product_up=}")
-        self.get_logger().info(f"{ce.dot_product_down=}")
+        T_R0_toolsol, T_listsol = self.robot.fk(ik_sol, return_individual_transforms=True)
 
+        transforms.extend(
+            [
+                TransformStamped(
+                    header=Header(frame_id="R0" if i == 0 else "sol_" + self.robot.frame_names[i]),
+                    child_frame_id="sol_" + self.robot.frame_names[i + 1],
+                    transform=matrix_to_transform(T),
+                )
+                for i, T in enumerate(T_listsol)
+            ]
+        )
+        transforms.append(
+            TransformStamped(
+                header=Header(frame_id="R0"),
+                child_frame_id="sol_tool",
+                transform=matrix_to_transform(T_R0_toolsol),
+            )
+        )
         transforms.extend(
             [
                 TransformStamped(
