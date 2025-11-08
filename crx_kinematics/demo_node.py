@@ -1,67 +1,28 @@
 from dataclasses import dataclass
-import io
 import time
-from typing import List, Union
 
 from cv_bridge import CvBridge
-import matplotlib.pyplot as plt
 import numpy as np
 import rclpy
 from rclpy.executors import ExternalShutdownException
 import rclpy.logging
 from rclpy.node import Node
-from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
+from tf2_ros.transform_broadcaster import TransformBroadcaster
 import tf_transformations as tr
 
-from geometry_msgs.msg import Point, Pose, Quaternion, Transform, TransformStamped, Vector3
 from sensor_msgs.msg import Image
-from std_msgs.msg import ColorRGBA, Header
-from tf2_msgs.msg import TFMessage
-from visualization_msgs.msg import Marker, MarkerArray
+from std_srvs.srv import Empty
+from visualization_msgs.msg import MarkerArray
 
+from crx_kinematics.utils.geometry import *
+from crx_kinematics.utils.visualization import create_marker_array, create_transforms, make_plot_img
 
-class ReBroadcastableStaticTransformBroadcaster(StaticTransformBroadcaster):
-    """
-    In ROS 2 Jazzy, StaticTransformBroadcaster does not allow updating an already sent
-    static TF. This class provides a workaround. See https://github.com/ros2/geometry2/issues/704.
-
-    While the authorative take in the previous issue is that disallowing updating is correct
-    behavior (I personally disagree ^^), a separate PR has since been merged into Rolling that
-    goes back to allowing updating. See https://github.com/ros2/geometry2/pull/820.
-    """
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.tf_cache = {}
-
-    def sendTransform(self, transform: Union[TransformStamped, List[TransformStamped]]) -> None:
-        if isinstance(transform, TransformStamped):
-            transform = [transform]
-
-        for tf in transform:
-            self.tf_cache[tf.child_frame_id] = tf
-
-        self.pub_tf.publish(TFMessage(transforms=self.tf_cache.values()))
-
-
-def matrix_to_transform(matrix: np.ndarray) -> Transform:
-    trans = tr.translation_from_matrix(matrix)
-    quat = tr.quaternion_from_matrix(matrix)
-
-    return Transform(
-        translation=Vector3(x=trans[0], y=trans[1], z=trans[2]),
-        rotation=Quaternion(x=quat[0], y=quat[1], z=quat[2], w=quat[3]),
-    )
-
-
-def matrix_to_pose(matrix: np.ndarray) -> Pose:
-    trans = tr.translation_from_matrix(matrix)
-    quat = tr.quaternion_from_matrix(matrix)
-
-    return Pose(
-        translation=Point(x=trans[0], y=trans[1], z=trans[2]),
-        rotation=Quaternion(x=quat[0], y=quat[1], z=quat[2], w=quat[3]),
-    )
+"""
+delta: offset along previous Z to the common normal
+theta: angle about previous z from old x to new x
+r (or a): length of the common normal. The radius about previous z
+alpha: angle about common normal, from old z axis to new z axis
+"""
 
 
 def to_xyzwpr(T):
@@ -76,114 +37,6 @@ def from_xyzwpr(xyzwpr):
     T[:3, 3] = [p / 1000 for p in xyzwpr[:3]]
 
     return T
-
-
-def numpy_to_point(arr):
-    return Point(x=arr[0], y=arr[1], z=arr[2])
-
-
-def isometry_inv(T):
-    """
-    Returns the inverse of a 4x4 matrix representation of an isometry (rigid transformation).
-    This is essentially a faster version of the more general np.linalg.inv.
-
-    Example:
-    >>> T = tr.random_rotation_matrix()
-    >>> T[:3, 3] = tr.random_vector(3)
-    >>> T_inv = isometry_inv(T)
-    >>> np.allclose(T_inv, np.linalg.inv(T))
-    True
-    """
-    R_inv = T[:3, :3].T
-    t_inv = -R_inv.dot(T[:3, 3])
-
-    T_inv = np.eye(4)
-    T_inv[:3, :3] = R_inv
-    T_inv[:3, 3] = t_inv
-
-    return T_inv
-
-
-def normalized(arr):
-    return arr / np.linalg.norm(arr)
-
-
-def vector_projection(a, b):
-    """
-    Returns the vector projection of a onto b.
-    https://en.wikipedia.org/wiki/Vector_projection
-    """
-    return a.dot(b) / b.dot(b) * b
-
-
-def vector_rejection(a, b):
-    """
-    Returns the vector rejection of a from b. In other words,
-    the orthogonal component of a that is perpendicular to b.
-    https://en.wikipedia.org/wiki/Vector_projection
-    """
-    return a - vector_projection(a, b)
-
-
-def angle_between(v1: np.ndarray, v2: np.ndarray) -> float:
-    """
-    Calculates the (unsigned) angle between two directional 3D vectors
-    >>> angle = angle_between([1,0,0], [0,1,0])
-    >>> np.isclose(angle, np.radians(90))
-    True
-    """
-    dot = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
-    return np.arccos(np.clip(dot, -1, 1))
-
-
-def construct_plane(dir1, dir2):
-    dir1_unit = dir1 / np.linalg.norm(dir1)
-
-    dir2_orthogonal = vector_rejection(dir2, dir1)
-    dir2_orthogonal = dir2_orthogonal / np.linalg.norm(dir2_orthogonal)
-
-    dir3 = np.cross(dir1_unit, dir2_orthogonal)
-
-    T = np.eye(4)
-    T[:3, :3] = np.array([dir1_unit, dir2_orthogonal, dir3]).T
-    return T
-
-
-def find_third_triangle_corner(AB, AC, BC):
-    """
-    Given a triangle where
-      1. The lengths of each side are known,
-      2. The first corner is at (0, 0)
-      3. The second corner is at (AB, 0)
-    Returns the position (x, y) of the third triangle.
-    Note that flipping the sign of y also is a valid solution, hence both solutions are returned
-
-           C = (x, y)
-         /   \
-      /        \
-    A ---------- B = (AB, 0)
-    
-    https://math.stackexchange.com/a/544025
-    """
-    x = (AC**2 - BC**2 + AB**2) / (2 * AB)
-
-    x_squared = x**2
-    AC_squared = AC**2
-
-    if x_squared > AC_squared:
-        y = 0.0
-    else:
-        y = np.sqrt(AC_squared - x_squared)
-
-    return np.array([x, y]), np.array([x, -y])
-
-
-"""
-delta: offset along previous Z to the common normal
-theta: angle about previous z from old x to new x
-r (or a): length of the common normal. The radius about previous z
-alpha: angle about common normal, from old z axis to new z axis
-"""
 
 
 class CircleEvaluation:
@@ -204,7 +57,7 @@ class CircleEvaluation:
         # Create O0O3O4 plane on which O3 will lie (it passes through [0,0,1])
         self.T_R0_plane = construct_plane(self.O4, np.array([0, 0, 1]))
 
-        # Find O3 in that plane. https://math.stackexchange.com/questions/543961/determine-third-point-of-triangle-when-two-points-and-all-sides-are-known
+        # Find O3 in that plane.
         O3UP, O3DOWN = find_third_triangle_corner(AB=self.dist_O4, AC=a3, BC=-r4)
 
         # Express the O3 candidates in the reference frame
@@ -218,96 +71,32 @@ class CircleEvaluation:
         self.dot_product_up = self.Z4UP @ self.Z5
         self.dot_product_down = self.Z4DOWN @ self.Z5
 
-    def determine_joint_values(self, dh_params, O5, O6, fk, T_R0_tool):
+    def determine_joint_values(self, dh_params, O5, O6, fk, T_R0_tool, is_up):
         J1 = np.atan2(self.O4[1], self.O4[0])
-        rclpy.logging.get_logger("try").info(f"J1={np.degrees(J1)}")
 
-        T_L1_L0 = isometry_inv(dh_params[0].T(J1))
-        R_L1_L0 = T_L1_L0[:3, :3]
+        R_L1_L0 = dh_params[0].T(J1)[:3, :3].T
         O_1_3 = R_L1_L0 @ self.O3UP
         J2 = -np.atan2(O_1_3[2], O_1_3[0]) + np.pi / 2
-        rclpy.logging.get_logger("try").info(f"J2={np.degrees(J2)}")
 
         O_1_4 = R_L1_L0 @ self.O4
         J3 = np.atan2(O_1_4[2] - O_1_3[2], O_1_4[0] - O_1_3[0])
-        rclpy.logging.get_logger("try").info(f"J3={np.degrees(J3)}")
 
         O_1_5 = R_L1_L0 @ O5
         O4O5_dir = O_1_5 - O_1_4
         J4 = np.atan2(O4O5_dir[2], -O4O5_dir[1])
-        rclpy.logging.get_logger("try").info(f"J4={np.degrees(J4)}")
 
         T_R0_L4 = fk([np.degrees(j) for j in [J1, J2, J3, J4, 0, 0]], up_to=4)
 
         O_4_6 = isometry_inv(T_R0_L4) @ [*O6, 1.0]
         J5 = np.atan2(O_4_6[0], -O_4_6[2])
-        rclpy.logging.get_logger("try").info(f"J5={np.degrees(J5)}")
 
         T_R0_L5 = T_R0_L4 @ dh_params[4].T(J5)
         T_L5_tool = isometry_inv(T_R0_L5) @ T_R0_tool
 
         J6 = np.atan2(-T_L5_tool[2, 0], T_L5_tool[0, 0])
-        rclpy.logging.get_logger("try").info(f"J6={np.degrees(J6)}")
 
-        solution = [J1, J2, J3, J4, J5, J6]
+        solution = [np.degrees(J) for J in [J1, J2, J3, J4, J5, J6]]
         return solution
-
-    def markers(self, frame_id="R0"):
-        markers = [
-            Marker(
-                header=Header(frame_id=frame_id),
-                ns="O_points",
-                type=Marker.SPHERE,
-                pose=Pose(position=numpy_to_point(self.O4)),
-                scale=Vector3(x=0.02, y=0.02, z=0.02),
-                color=ColorRGBA(r=1.0, g=0.0, b=1.0, a=0.5),
-            ),
-            Marker(
-                header=Header(frame_id="plane"),
-                ns="O0O3O4_plane",
-                pose=matrix_to_pose(self.T_R0_plane),
-                type=Marker.CYLINDER,
-                scale=Vector3(x=2 * self.dist_O4, y=2 * self.dist_O4, z=0.001),
-                color=ColorRGBA(r=0.5, g=0.5, b=0.5, a=0.5),
-            ),
-        ]
-        markers.extend(
-            [
-                Marker(
-                    header=Header(frame_id=frame_id),
-                    ns="Z4Z5_arrows",
-                    type=Marker.ARROW,
-                    scale=Vector3(x=0.005, y=0.02, z=0.02),
-                    color=ColorRGBA(
-                        r=0.0 if close_to_zero else 1.0,
-                        g=1.0 if close_to_zero else 0.0,
-                        b=0.0,
-                        a=0.5,
-                    ),
-                    points=[numpy_to_point(start), numpy_to_point(end)],
-                )
-                for start, end, close_to_zero in [
-                    (self.O4 + self.Z5fulllength, self.O4, False),
-                    (self.O3UP, self.O4, np.abs(self.dot_product_up) < 0.1),
-                    (self.O3DOWN, self.O4, np.abs(self.dot_product_down) < 0.1),
-                ]
-            ]
-        )
-        markers.extend(
-            [
-                Marker(
-                    header=Header(frame_id=frame_id),
-                    ns="O3_candidates",
-                    type=Marker.SPHERE,
-                    pose=Pose(position=numpy_to_point(O)),
-                    scale=Vector3(x=0.02, y=0.02, z=0.02),
-                    color=ColorRGBA(r=1.0, g=1.0, b=1.0, a=0.5),
-                )
-                for O in [self.O3UP, self.O3DOWN]
-            ]
-        )
-
-        return markers
 
 
 class CRXRobot:
@@ -375,40 +164,51 @@ class CRXRobot:
 
         return T_R0_tool
 
-    def ik(self, xyzwpr):
-        T_R0_tool = from_xyzwpr(xyzwpr)
+    def ik(self, T_R0_tool):
+        # Step 1: Positioning the centers O6 and O5 in the frame R0
         O6 = T_R0_tool[:3, 3]
         O5 = (T_R0_tool @ [0, 0, self.L6.r, 1])[:3]
 
+        # Step 2: Position all O4 candidates on a circle. Each candidate is a CircleEvaluation
         circle_evaluations = [
             CircleEvaluation(q, T_R0_tool, self.dh_params, O5)
             for q in np.linspace(0, 2 * np.pi, 360)
         ]
+        # Each CircleEvaluation also performs
+        #  - Step 3: Position the 2 O3 candidates (O3UP, O3DOWN) in the vertical O0O3O4 plane
+        #  - Calculate the dot products Z4Z5 for UP and DOWN
 
+        # Step 4: Calculate the sample functions (dot_product_up, dot_product_down)
         sample_signal_up, sample_signal_down = zip(
             *[(ce.dot_product_up, ce.dot_product_down) for ce in circle_evaluations]
         )
 
-        zeros = []
+        # Step 5: Find the Ns zeros of the sample functions
+        up_zeros = []
+        down_zeros = []
         for i in range(1, len(sample_signal_down)):
             if np.sign(sample_signal_down[i - 1]) != np.sign(sample_signal_down[i]):
-                zeros.append(i)
+                down_zeros.append(i)
             if np.sign(sample_signal_up[i - 1]) != np.sign(sample_signal_up[i]):
-                zeros.append(i)
+                up_zeros.append(i)
 
-        ik_sol = circle_evaluations[zeros[3]].determine_joint_values(
-            self.dh_params, O5, O6, self.fk, T_R0_tool
-        )
+        # Step 6
+        ik_sols = [
+            circle_evaluations[zero_idx].determine_joint_values(
+                self.dh_params, O5, O6, self.fk, T_R0_tool, is_up
+            )
+            for zero_idx, is_up in zip(
+                up_zeros + down_zeros, [True] * len(up_zeros) + [False] * len(down_zeros)
+            )
+        ]
 
         return (
-            T_R0_tool,
-            O6,
-            O5,
             circle_evaluations,
             sample_signal_up,
             sample_signal_down,
-            zeros,
-            [np.degrees(J) for J in ik_sol],
+            up_zeros,
+            down_zeros,
+            ik_sols,
         )
 
 
@@ -417,16 +217,20 @@ class DemoNode(Node):
         super().__init__("demo_node")
         self.robot = CRXRobot()
 
-        self.tf_broadcaster = ReBroadcastableStaticTransformBroadcaster(self)
+        self.tf_broadcaster = TransformBroadcaster(self)
         self.marker_publisher = self.create_publisher(MarkerArray, "markers", 10)
         self.plot_image_publisher = self.create_publisher(Image, "plot_img", 10)
 
         self.subscription = self.create_timer(0.1, self.timer_cb)
+        self.paused = False
+        self.create_service(Empty, "pause_resume", self.pause_resume_cb)
+
+    def pause_resume_cb(self, _, response):
+        self.paused = not self.paused
+        return response
 
     def timer_cb(self):
-        t = ((self.get_clock().now().nanoseconds / 1e9) % 10) / 10
-        self.get_logger().info(f" {t=}")
-
+        # t = ((self.get_clock().now().nanoseconds / 1e9) % 10) / 10
         # angle = 22.5 * np.sin(2 * np.pi * t)
         # joint_values = [0, round(float(angle), 3), 0, 0, 0, 0]
 
@@ -439,140 +243,39 @@ class DemoNode(Node):
         T_R0_tool, T_list = self.robot.fk(
             joint_values=joint_values, return_individual_transforms=True
         )
-        xyzwpr = to_xyzwpr(T_R0_tool)
-        self.get_logger().info(f" FK={[round(x, 3) for x  in xyzwpr]}")
-
-        transforms = [
-            TransformStamped(
-                header=Header(frame_id=self.robot.frame_names[i]),
-                child_frame_id=self.robot.frame_names[i + 1],
-                transform=matrix_to_transform(T),
-            )
-            for i, T in enumerate(T_list)
-        ]
+        self.get_logger().info(f" FK={[round(x, 3) for x in to_xyzwpr(T_R0_tool)]}")
 
         ### IK ###
 
         (
-            T_R0_tool,
-            O6,
-            O5,
             circle_evaluations,
             sample_signal_up,
             sample_signal_down,
-            zeros,
-            ik_sol,
-        ) = self.robot.ik(
-            xyzwpr
-        )  # [80.321, 287.676, 394.356, -131.819, -45.268, 61.453])
+            up_zeros,
+            down_zeros,
+            ik_sols,
+        ) = self.robot.ik(T_R0_tool)
+        ik_sol = ik_sols[1]
+        self.get_logger().info(f" IK={[float(round(x, 3)) for x in ik_sol]}")
 
-        i = 360 * (time.time() % 4) / 4
+        i = 360 * (0 if self.paused else time.time() % 10) / 10
         ce = circle_evaluations[int(i)]
 
-        fig, ax = plt.subplots()
-        x = np.linspace(0, 2 * np.pi, 360)
-        ax.plot(x, sample_signal_up, color="r", label="Z5Z4UP")
-        ax.plot(x, sample_signal_down, color="b", label="Z5Z4DOWN")
-        ax.axhline(y=0.0, color="black", linestyle="-")
-        ax.axvline(x=np.radians(i), color="black", linestyle="-")
-        for z in zeros:
-            ax.axvline(x=circle_evaluations[z].q, color="black", linestyle="--")
-        ax.set_title("Figure 7: Sample signal dot products")
-        ax.legend()
-        fig.canvas.draw()
+        _, T_listsol = self.robot.fk(ik_sol, return_individual_transforms=True)
 
-        io_buf = io.BytesIO()
-        fig.savefig(io_buf, format="raw")
-        io_buf.seek(0)
-        image_array = np.reshape(
-            np.frombuffer(io_buf.getvalue(), dtype=np.uint8),
-            newshape=(int(fig.bbox.bounds[3]), int(fig.bbox.bounds[2]), -1),
+        ### Visualizations ###
+
+        self.marker_publisher.publish(create_marker_array(ce, circle_evaluations))
+        now = self.get_clock().now().to_msg()
+        self.tf_broadcaster.sendTransform(
+            create_transforms(
+                T_list, T_listsol, T_R0_tool, ce.T_R0_plane, self.robot.frame_names, now
+            )
         )
-        io_buf.close()
-        plt.close(fig)
-
+        image_array = make_plot_img(
+            sample_signal_up, sample_signal_down, up_zeros + down_zeros, circle_evaluations, i
+        )
         self.plot_image_publisher.publish(CvBridge().cv2_to_imgmsg(image_array))
-
-        T_R0_toolsol, T_listsol = self.robot.fk(ik_sol, return_individual_transforms=True)
-
-        transforms.extend(
-            [
-                TransformStamped(
-                    header=Header(frame_id="R0" if i == 0 else "sol_" + self.robot.frame_names[i]),
-                    child_frame_id="sol_" + self.robot.frame_names[i + 1],
-                    transform=matrix_to_transform(T),
-                )
-                for i, T in enumerate(T_listsol)
-            ]
-        )
-        transforms.append(
-            TransformStamped(
-                header=Header(frame_id="R0"),
-                child_frame_id="sol_tool",
-                transform=matrix_to_transform(T_R0_toolsol),
-            )
-        )
-        transforms.extend(
-            [
-                TransformStamped(
-                    header=Header(frame_id="R0"),
-                    child_frame_id="desired_pose",
-                    transform=matrix_to_transform(T_R0_tool),
-                ),
-                TransformStamped(
-                    header=Header(frame_id="R0"),
-                    child_frame_id="plane",
-                    transform=matrix_to_transform(ce.T_R0_plane),
-                ),
-            ]
-        )
-
-        markers = [
-            Marker(
-                header=Header(frame_id="R0"),
-                ns="O_points",
-                id=i,
-                type=Marker.SPHERE,
-                pose=Pose(position=Point(x=x, y=y, z=z)),
-                scale=Vector3(x=0.02, y=0.02, z=0.02),
-                color=ColorRGBA(r=1.0, g=0.0, b=1.0, a=0.5),
-            )
-            for i, (x, y, z) in enumerate([O6, O5, [0.0, 0.0, 0.0]])
-        ]
-        markers.extend(ce.markers())
-        markers.extend(
-            [
-                Marker(
-                    header=Header(frame_id="R0"),
-                    ns="O4_candidate_line_strip",
-                    type=Marker.LINE_STRIP,
-                    scale=Vector3(x=0.001, y=0.001, z=0.001),
-                    color=ColorRGBA(r=1.0, g=0.0, b=0.0, a=0.5),
-                    points=[numpy_to_point(ce.O4) for ce in circle_evaluations],
-                ),
-                Marker(
-                    header=Header(frame_id="R0"),
-                    ns="O3UP_line_strip",
-                    type=Marker.LINE_STRIP,
-                    scale=Vector3(x=0.001, y=0.001, z=0.001),
-                    color=ColorRGBA(r=0.0, g=0.0, b=1.0, a=0.5),
-                    points=[numpy_to_point(ce.O3UP) for ce in circle_evaluations],
-                ),
-                Marker(
-                    header=Header(frame_id="R0"),
-                    ns="O3DOWN_line_strip",
-                    type=Marker.LINE_STRIP,
-                    scale=Vector3(x=0.001, y=0.001, z=0.001),
-                    color=ColorRGBA(r=0.0, g=1.0, b=0.0, a=0.5),
-                    points=[numpy_to_point(ce.O3DOWN) for ce in circle_evaluations],
-                ),
-            ]
-        )
-        for i, m in enumerate(markers):
-            m.id = i
-
-        self.tf_broadcaster.sendTransform(transforms)
-        self.marker_publisher.publish(MarkerArray(markers=markers))
 
 
 def main(args=None):
@@ -582,12 +285,6 @@ def main(args=None):
         rclpy.spin(node)
     except (KeyboardInterrupt, ExternalShutdownException):
         pass
-    # try:
-    #     with rclpy.init(args=args):
-    #         node = DemoNode()
-    #         rclpy.spin(node)
-    # except (KeyboardInterrupt, ExternalShutdownException):
-    #     pass
 
 
 if __name__ == "__main__":
