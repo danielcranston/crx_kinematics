@@ -6,6 +6,8 @@ from crx_kinematics.utils.geometry import (
     construct_plane,
     find_third_triangle_corner,
     find_zeros,
+    get_dual_ik_solution,
+    harmonize_towards_zero,
     isometry_inv,
     normalized,
 )
@@ -190,6 +192,9 @@ class CRXRobot:
         ]
 
         # Step 7: Calculate dual solutions for each of the above IK solutions
+        ik_sols.extend([get_dual_ik_solution(ik_sol) for ik_sol in ik_sols])
+
+        ik_sols = [harmonize_towards_zero(solution) for solution in ik_sols]
 
         debug_data = IKDebugData(
             circle_evaluations,

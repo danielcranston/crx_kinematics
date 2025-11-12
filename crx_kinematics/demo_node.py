@@ -9,7 +9,7 @@ from tf2_ros.transform_broadcaster import TransformBroadcaster
 import tf_transformations as tr
 
 from sensor_msgs.msg import Image
-from std_srvs.srv import Empty
+from std_srvs.srv import Empty, Trigger
 from visualization_msgs.msg import MarkerArray
 
 from crx_kinematics.robot import CRXRobot
@@ -57,9 +57,25 @@ class DemoNode(Node):
         self.create_service(Empty, "pause_resume", self.pause_resume_cb)
         self.sol_idx = 0
         self.create_service(Empty, "next_sol", self.next_sol_cb)
+        self.joint_value_idx = -2
+        self.joint_values = [
+            [+78, -41, +17, -42, -60, +10],  # Eq 10
+            [-14.478, 11.999, -29.780, -180, 60.220, -95.522],  # JC#5 in Table 5
+            [0] * 6,
+            [78, -41, 17, -42, -60, 10],  # JB#4 in Table 4
+            [-150.538, 39.473, 188.392, -62.318, 85.679, -119.224],  #  JB#7 in Table 4
+            [-150.537, 39.472, -171.608, -62.318, 85.679, -119.224],  # Our IK
+        ]
+        self.create_service(Trigger, "next_joint_value", self.next_joint_value_cb)
 
     def next_sol_cb(self, _, response):
         self.sol_idx = self.sol_idx + 1
+        return response
+
+    def next_joint_value_cb(self, _, response):
+        self.joint_value_idx = (self.joint_value_idx + 1) % len(self.joint_values)
+        response.success = True
+        response.message = f"Using joint value {self.joint_value_idx}"
         return response
 
     def pause_resume_cb(self, _, response):
@@ -70,10 +86,7 @@ class DemoNode(Node):
         # t = ((self.get_clock().now().nanoseconds / 1e9) % 10) / 10
         # angle = 22.5 * np.sin(2 * np.pi * t)
         # joint_values = [0, round(float(angle), 3), 0, 0, 0, 0]
-
-        joint_values = [+78, -41, +17, -42, -60, +10]  # Eq 10
-        # joint_values = [-14.478, 11.999, -29.780, -180, 60.220, -95.522]  # JC#5 in Table 5
-        # joint_values = [0] * 6
+        joint_values = self.joint_values[self.joint_value_idx]
         self.get_logger().info(f" {joint_values=}")
 
         ### FK ###

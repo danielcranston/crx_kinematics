@@ -109,3 +109,26 @@ def find_zeros(sample_signal_up, sample_signal_down, sample_signal_x, fn):
 
 
 # determine_joint_angles(O3, O4, O5, T_R0_tool, fk):
+
+
+def get_dual_ik_solution(ik_solution):
+    """
+    Quote from Step 7:
+    For CRX cobots, when a solution [J] (6 joint parameters) is valid for a Desired-Pose, it
+    is easy to verify that the other corresponding solution, called the dual solution, is also valid.
+    """
+    J1, J2, J3, J4, J5, J6 = ik_solution
+    return [
+        J1 - 180,
+        -J2,
+        180 - J3,
+        J4 - 180,
+        J5,
+        J6,
+    ]
+
+
+def harmonize_towards_zero(joint_values):
+    """https://stackoverflow.com/questions/28313558/how-to-wrap-a-number-into-a-range"""
+    min_val, max_val = -180, 180
+    return [min_val + (x - min_val) % (max_val - min_val) for x in joint_values]
