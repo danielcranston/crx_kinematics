@@ -44,30 +44,30 @@ class CircleEvaluation:
         self.dot_product_down = self.Z4DOWN @ self.Z5
 
     def determine_joint_values(self, dh_params, O5, O6, T_R0_tool, is_up):
-        J1 = np.atan2(self.O4[1], self.O4[0])
+        J1 = np.arctan2(self.O4[1], self.O4[0])
 
         T_L1_L0 = isometry_inv(dh_params[0].T(J1))
         R_L1_L0 = T_L1_L0[:3, :3]
         O_1_3 = R_L1_L0 @ (self.O3UP if is_up else self.O3DOWN)
-        J2 = -np.atan2(O_1_3[2], O_1_3[0]) + np.pi / 2
+        J2 = -np.arctan2(O_1_3[2], O_1_3[0]) + np.pi / 2
 
         O_1_4 = R_L1_L0 @ self.O4
-        J3 = np.atan2(O_1_4[2] - O_1_3[2], O_1_4[0] - O_1_3[0])
+        J3 = np.arctan2(O_1_4[2] - O_1_3[2], O_1_4[0] - O_1_3[0])
 
         T_L2_L1 = isometry_inv(dh_params[1].T(J2))
         T_L3_L2 = isometry_inv(dh_params[2].T(J3 + J2))  # Account for "Fanuc pecularity"
         T_L3_L0 = T_L3_L2 @ T_L2_L1 @ T_L1_L0
         O_3_5 = T_L3_L0 @ [*O5, 1.0]
-        J4 = np.atan2(O_3_5[0], O_3_5[2])
+        J4 = np.arctan2(O_3_5[0], O_3_5[2])
 
         T_L4_L3 = isometry_inv(dh_params[3].T(J4))
         T_L4_L0 = T_L4_L3 @ T_L3_L0
         O_4_6 = T_L4_L0 @ [*O6, 1.0]
-        J5 = np.atan2(O_4_6[0], -O_4_6[2])
+        J5 = np.arctan2(O_4_6[0], -O_4_6[2])
 
         T_L5_L0 = isometry_inv(dh_params[4].T(J5)) @ T_L4_L0
         T_L5_tool = T_L5_L0 @ T_R0_tool
-        J6 = np.atan2(-T_L5_tool[2, 0], T_L5_tool[0, 0])
+        J6 = np.arctan2(-T_L5_tool[2, 0], T_L5_tool[0, 0])
 
         solution = [np.degrees(J) for J in [J1, J2, J3, J4, J5, J6]]
         return solution
