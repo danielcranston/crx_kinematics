@@ -13,6 +13,7 @@ from std_srvs.srv import Empty, Trigger
 from visualization_msgs.msg import MarkerArray
 
 from crx_kinematics.robot import CRXRobot
+from crx_kinematics.utils.geometry import get_dual_ik_solution, harmonize_towards_zero
 from crx_kinematics.utils.visualization import (
     add_robot_joint_markers,
     create_marker_array,
@@ -67,6 +68,12 @@ class DemoNode(Node):
             [-150.537, 39.472, -171.608, -62.318, 85.679, -119.224],  # Our IK
         ]
         self.create_service(Trigger, "next_joint_value", self.next_joint_value_cb)
+        self.use_dual_joint_pose = False
+        self.create_service(Empty, "toggle_dual_joint_pose", self.toggle_dual_joint_pose_cb)
+
+    def toggle_dual_joint_pose_cb(self, _, response):
+        self.use_dual_joint_pose = not self.use_dual_joint_pose
+        return response
 
     def next_sol_cb(self, _, response):
         self.sol_idx = self.sol_idx + 1
@@ -87,6 +94,8 @@ class DemoNode(Node):
         # angle = 22.5 * np.sin(2 * np.pi * t)
         # joint_values = [0, round(float(angle), 3), 0, 0, 0, 0]
         joint_values = self.joint_values[self.joint_value_idx]
+        if self.use_dual_joint_pose:
+            joint_values = harmonize_towards_zero(get_dual_ik_solution(joint_values))
         self.get_logger().info(f" {joint_values=}")
 
         ### FK ###
