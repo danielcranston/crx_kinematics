@@ -1,0 +1,4 @@
+<library path="crx_kinematics_plugin">
+    <class name="crx_kinematics/CRXKinematicsPlugin" type="crx_kinematics::CRXKinematicsPlugin" base_class_type="kinematics::KinematicsBase">
+    </class>
+</library>

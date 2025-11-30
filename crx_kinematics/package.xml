@@ -8,6 +8,8 @@
   <license>MIT</license>
 
   <depend>eigen</depend>
+  <depend>moveit_core</depend>
+  <depend>pluginlib</depend>
 
   <buildtool_depend>ament_cmake_ros</buildtool_depend>
 
@@ -15,5 +17,6 @@
 
   <export>
     <build_type>ament_cmake</build_type>
+    <moveit_core plugin="${prefix}/crx_kinematics_plugin_description.xml" />
   </export>
 </package>
