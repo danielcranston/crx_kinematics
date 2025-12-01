@@ -1,0 +1,46 @@
+name: ROS CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: ["ros:jazzy-ros-base-noble", "ros:kilted-ros-base-noble"]
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: src
+
+      - name: Run sudo apt update
+        run: sudo apt -q update
+
+      - name: Run rosdep update
+        run: rosdep update
+
+      - name: Install binary dependencies
+        run: rosdep install --from-paths src --ignore-src -y -q
+
+      - name: Build packages
+        shell: bash
+        run: |
+          source /opt/ros/$ROS_DISTRO/setup.bash
+          colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release --packages-up-to crx_kinematics crx_kinematics_py
+
+      - name: Run tests
+        shell: bash
+        run: |
+          source /opt/ros/$ROS_DISTRO/setup.bash
+          colcon test --event-handlers console_cohesion+ --packages-select crx_kinematics crx_kinematics_py
+
+      - name: Check test results
+        run: colcon test-result --all --verbose
