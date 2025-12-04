@@ -63,3 +63,7 @@ colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release --package
 # Test
 colcon test --event-handlers console_cohesion+ --packages-select crx_kinematics crx_kinematics_py
 ```
+
+# License
+
+MIT
