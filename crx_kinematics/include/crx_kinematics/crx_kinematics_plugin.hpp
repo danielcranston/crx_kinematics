@@ -59,6 +59,13 @@ class CRXKinematicsPlugin : public kinematics::KinematicsBase
                                const std::vector<double>& joint_angles,
                                std::vector<geometry_msgs::msg::Pose>& poses) const override final;
 
+    virtual bool getPositionIK(const std::vector<geometry_msgs::msg::Pose>& ik_poses,
+                               const std::vector<double>& ik_seed_state,
+                               std::vector<std::vector<double> >& solutions,
+                               kinematics::KinematicsResult& result,
+                               const kinematics::KinematicsQueryOptions& options =
+                                   kinematics::KinematicsQueryOptions()) const override final;
+
     virtual const std::vector<std::string>& getJointNames() const override final;
     virtual const std::vector<std::string>& getLinkNames() const override final;
 
