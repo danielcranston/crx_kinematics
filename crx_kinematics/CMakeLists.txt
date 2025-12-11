@@ -4,6 +4,7 @@ set(CMAKE_CXX_STANDARD 20)
 
 find_package(ament_cmake REQUIRED)
 find_package(Eigen3 REQUIRED)
+find_package(tf2_eigen REQUIRED)
 find_package(moveit_core REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(rclcpp REQUIRED)
@@ -22,7 +23,7 @@ target_include_directories(
 target_link_libraries(
   crx_kinematics_plugin
   PUBLIC moveit_core::moveit_robot_model
-  PRIVATE robot moveit_core::moveit_kinematics_base
+  PRIVATE robot tf2_eigen::tf2_eigen moveit_core::moveit_kinematics_base
           moveit_core::moveit_robot_state pluginlib::pluginlib rclcpp::rclcpp)
 
 install(DIRECTORY include/ DESTINATION include/crx_kinematics)

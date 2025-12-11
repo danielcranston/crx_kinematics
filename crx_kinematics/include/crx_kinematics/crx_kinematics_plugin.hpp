@@ -1,4 +1,5 @@
 #pragma once
+#include "crx_kinematics/robot.hpp"
 
 #include <moveit/kinematics_base/kinematics_base.hpp>
 
@@ -14,6 +15,12 @@ class CRXKinematicsPlugin : public kinematics::KinematicsBase
                             std::string const& base_frame,
                             std::vector<std::string> const& tip_frames,
                             double search_discretization) override final;
+
+    bool DoIK(const geometry_msgs::msg::Pose& ik_pose,
+              std::vector<double>& solution,
+              moveit_msgs::msg::MoveItErrorCodes& error_code) const;
+
+    // Virtual function override boilerplate below
 
     virtual bool getPositionIK(const geometry_msgs::msg::Pose& ik_pose,
                                const std::vector<double>& ik_seed_state,
@@ -72,6 +79,7 @@ class CRXKinematicsPlugin : public kinematics::KinematicsBase
   private:
     std::vector<std::string> joint_names_;
     std::vector<std::string> link_names_;
+    crx_kinematics::CRXRobot robot_;
 };
 
 }  // namespace crx_kinematics
