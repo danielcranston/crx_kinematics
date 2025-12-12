@@ -15,11 +15,11 @@ namespace
  * The below params attribute all values in each column to i for convenience, although it's
  * technically incorrect according to the modified DH convention.
  */
-std::array<DHParams, 6> crx_10ia_params()
+std::array<DHParams, 6> crx_10ia_l_params()
 {
     DHParams L1 = {};
     DHParams L2 = { .alpha = -M_PI / 2, .theta = -M_PI / 2 };
-    DHParams L3 = { .a = 0.54, .alpha = M_PI };
+    DHParams L3 = { .a = 0.71, .alpha = M_PI };
     DHParams L4 = { .alpha = -M_PI / 2, .r = -0.54 };
     DHParams L5 = { .alpha = M_PI / 2, .r = 0.15 };
     DHParams L6 = { .alpha = -M_PI / 2, .r = -0.16 };
@@ -262,7 +262,7 @@ Eigen::Isometry3d DHParams::T(double joint_value) const
     return out;
 }
 
-CRXRobot::CRXRobot() : dh_params(crx_10ia_params())
+CRXRobot::CRXRobot() : dh_params(crx_10ia_l_params())
 {
 }
 
