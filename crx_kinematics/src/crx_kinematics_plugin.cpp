@@ -33,6 +33,12 @@ bool CRXKinematicsPlugin::initialize(rclcpp::Node::SharedPtr const& node,
     joint_names_ = jmg->getJointModelNames();
     link_names_.push_back(getTipFrame());
 
+    RCLCPP_INFO(
+        moveit::getLogger("crx_kinematics"), "model_name: '%s'", robot_model.getName().c_str());
+
+    RCLCPP_INFO(moveit::getLogger("crx_kinematics"),
+                "model_frame: '%s'",
+                robot_model.getModelFrame().c_str());
     RCLCPP_INFO(moveit::getLogger("crx_kinematics"), "tip_frame: '%s'", getTipFrame().c_str());
     RCLCPP_INFO(moveit::getLogger("crx_kinematics"), "base_frame: '%s'", base_frame_.c_str());
     for (const auto& name : joint_names_)
@@ -40,7 +46,28 @@ bool CRXKinematicsPlugin::initialize(rclcpp::Node::SharedPtr const& node,
         RCLCPP_INFO(moveit::getLogger("crx_kinematics"), "joint name: '%s'", name.c_str());
     }
 
-    robot_ = crx_kinematics::CRXRobot();
+    std::map<std::string, std::pair<crx_kinematics::RobotNameEnum, double>> model_map = {
+        { "crx5ia", { crx_kinematics::RobotNameEnum::crx5ia, 0.185 } },
+        { "crx10ia", { crx_kinematics::RobotNameEnum::crx10ia, 0.245 } },
+        { "crx10ia_l", { crx_kinematics::RobotNameEnum::crx10ia_l, 0.245 } },
+        { "crx20ia_l", { crx_kinematics::RobotNameEnum::crx20ia_l, 0.245 } },
+        { "crx30ia", { crx_kinematics::RobotNameEnum::crx30ia, 0.37 } },
+
+    };
+
+    if (const auto& it = model_map.find(robot_model.getName()); it != model_map.end())
+    {
+        robot_ = crx_kinematics::CRXRobot(it->second.first);
+        base_j1_height_ = it->second.second;
+    }
+    else
+    {
+        RCLCPP_ERROR(moveit::getLogger("crx_kinematics"),
+                     "Unexpected model name: '%s'",
+                     robot_model.getName().c_str());
+        return false;
+    }
+
     return true;
 }
 
@@ -52,7 +79,7 @@ bool CRXKinematicsPlugin::DoIK(const geometry_msgs::msg::Pose& ik_pose,
     tf2::fromMsg(ik_pose, T_R0_rostool);
 
     // ROS pose is given in base frame, but CRXRobot::IK expects it in "R0" (pendant origin) frame
-    T_R0_rostool.translation().z() = T_R0_rostool.translation().z() - 0.245;
+    T_R0_rostool.translation().z() = T_R0_rostool.translation().z() - base_j1_height_;
 
     // Account for the different definitions of the TCP frame between the Fanuc official URDFs and
     // Abbes and Poisson.

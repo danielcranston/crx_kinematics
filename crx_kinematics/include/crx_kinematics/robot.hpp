@@ -5,6 +5,15 @@
 namespace crx_kinematics
 {
 
+enum class RobotNameEnum
+{
+    crx5ia = 0,
+    crx10ia,
+    crx10ia_l,
+    crx20ia_l,
+    crx30ia
+};
+
 /**
  * @brief Holds the ("modified") DH params for a single joint.
  */
@@ -62,6 +71,7 @@ class CRXRobot
 {
   public:
     CRXRobot();
+    CRXRobot(const RobotNameEnum& robot_name);
     Eigen::Isometry3d fk(const std::array<double, 6>& joint_values) const;
     std::vector<std::array<double, 6>> ik(const Eigen::Isometry3d& desired_pose) const;
 

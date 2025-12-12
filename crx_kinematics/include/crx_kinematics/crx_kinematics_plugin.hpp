@@ -80,6 +80,7 @@ class CRXKinematicsPlugin : public kinematics::KinematicsBase
     std::vector<std::string> joint_names_;
     std::vector<std::string> link_names_;
     crx_kinematics::CRXRobot robot_;
+    double base_j1_height_;
 };
 
 }  // namespace crx_kinematics
