@@ -104,7 +104,7 @@ TEST(TestCrxKinematics, test_ik_example_3_1)
         { -135.389, -89.087, 70.807, -85.297, 121.416, 121.782 },
         { -144.839, -88.468, 39.850, 71.154, -111.920, -91.804 },
         { -150.538, 39.473, 188.392 - 360, -62.318, 85.679, -119.224 },
-        { -+102, 41, 163, 138, -60, 10 },
+        { -102, 41, 163, 138, -60, 10 },
     };
     // NOTE: "188.392" is the only occurrence in the paper of a value not harmonized towards
     // zero [-180, 180].
@@ -144,7 +144,7 @@ TEST(TestCrxKinematics, test_ik_example_3_3)
 
     // Table 6
     std::vector<std::array<double, 6>> expected_solutions = {
-        // 12 solutions
+        // 16 solutions
         { -60.125, 62.707, 112.015, 90.165, 92.586, 132.291 },
         { -63.318, 62.684, 143.064, -93.111, -89.750, -78.691 },
         { 11.855, 54.151, 144.007, -28.773, -142.889, -48.616 },

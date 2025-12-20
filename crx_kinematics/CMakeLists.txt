@@ -22,9 +22,9 @@ target_include_directories(
                                $<INSTALL_INTERFACE:include/crx_kinematics>)
 target_link_libraries(
   crx_kinematics_plugin
-  PUBLIC moveit_core::moveit_robot_model
-  PRIVATE robot tf2_eigen::tf2_eigen moveit_core::moveit_kinematics_base
-          moveit_core::moveit_robot_state pluginlib::pluginlib rclcpp::rclcpp)
+  PUBLIC moveit_core::moveit_robot_model moveit_core::moveit_kinematics_base
+  PRIVATE robot tf2_eigen::tf2_eigen moveit_core::moveit_robot_state
+          pluginlib::pluginlib rclcpp::rclcpp)
 
 install(DIRECTORY include/ DESTINATION include/crx_kinematics)
 install(
@@ -38,9 +38,16 @@ pluginlib_export_plugin_description_file(moveit_core
 
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
-  ament_add_gtest(test_fk_ik test/test_fk_ik.cpp)
-  target_include_directories(test_fk_ik PRIVATE include)
-  target_link_libraries(test_fk_ik robot)
+
+  function(add_unit_test TEST_NAME)
+    ament_add_gtest(${TEST_NAME} test/${TEST_NAME}.cpp)
+    target_include_directories(${TEST_NAME} PRIVATE include)
+    target_link_libraries(${TEST_NAME} robot crx_kinematics_plugin
+                          moveit_core::moveit_test_utils tf2_eigen::tf2_eigen)
+  endfunction()
+
+  add_unit_test(test_fk_ik)
+  add_unit_test(test_crx_kinematics_plugin)
 endif()
 
 ament_export_targets(export_crx_kinematics HAS_LIBRARY_TARGET)

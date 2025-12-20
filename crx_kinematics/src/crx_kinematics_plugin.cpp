@@ -49,7 +49,7 @@ bool CRXKinematicsPlugin::initialize(rclcpp::Node::SharedPtr const& node,
     RCLCPP_INFO(moveit::getLogger("crx_kinematics"), "base_frame: '%s'", base_frame_.c_str());
     for (const auto& name : joint_names_)
     {
-        RCLCPP_INFO(moveit::getLogger("crx_kinematics"), "joint name: '%s'", name.c_str());
+        RCLCPP_DEBUG(moveit::getLogger("crx_kinematics"), "joint name: '%s'", name.c_str());
     }
 
     std::map<std::string, std::pair<crx_kinematics::RobotNameEnum, double>> model_map = {
@@ -58,7 +58,6 @@ bool CRXKinematicsPlugin::initialize(rclcpp::Node::SharedPtr const& node,
         { "crx10ia_l", { crx_kinematics::RobotNameEnum::crx10ia_l, 0.245 } },
         { "crx20ia_l", { crx_kinematics::RobotNameEnum::crx20ia_l, 0.245 } },
         { "crx30ia", { crx_kinematics::RobotNameEnum::crx30ia, 0.37 } },
-
     };
 
     if (const auto& it = model_map.find(robot_model.getName()); it != model_map.end())
@@ -204,11 +203,33 @@ bool CRXKinematicsPlugin::getPositionFK(const std::vector<std::string>& link_nam
                                         const std::vector<double>& joint_angles,
                                         std::vector<geometry_msgs::msg::Pose>& poses) const
 {
-    poses.clear();
-    for (std::size_t i = 0u; i < link_names.size(); ++i)
+    if (!(link_names.size() == 1 && link_names[0] == getTipFrame()))
     {
-        poses.push_back(geometry_msgs::msg::Pose());
+        RCLCPP_ERROR(moveit::getLogger("crx_kinematics"),
+                     "This plugin only supports looking up FK for the tip frame ('%s')",
+                     getTipFrame().c_str());
+        return false;
     }
+    if (joint_angles.size() != 6)
+    {
+        RCLCPP_ERROR(moveit::getLogger("crx_kinematics"),
+                     "Expected 6 joint angles for FK, but got %lu",
+                     joint_angles.size());
+        return false;
+    }
+
+    std::array<double, 6> joint_values;
+    std::copy(joint_angles.begin(), joint_angles.end(), joint_values.begin());
+
+    Eigen::Isometry3d T_R0_tool = robot_.fk(joint_values);
+
+    // Translate to put the pose in base frame, not R0 frame.
+    T_R0_tool.translation().z() += base_j1_height_;
+
+    geometry_msgs::msg::Pose fk_pose = Eigen::toMsg(T_R0_tool);
+
+    poses.clear();
+    poses.push_back(fk_pose);
     return true;
 }
 
