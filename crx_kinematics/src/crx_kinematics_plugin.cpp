@@ -1,12 +1,15 @@
 #include "crx_kinematics/crx_kinematics_plugin.hpp"
 
 #include <algorithm>
+#include <ranges>
 
 #include <moveit/robot_model/robot_model.hpp>
 #include <pluginlib/class_list_macros.hpp>
 #include <tf2_eigen/tf2_eigen.hpp>
 
 namespace crx_kinematics
+{
+namespace
 {
 // Transform relating the ROS driver "flange" frame orientation convention to the "Pendant" / "Abbes
 // and Poisson" convention. The latter is expected by CRXRobot::ik, hence the need for conversion.
@@ -20,6 +23,7 @@ const Eigen::Isometry3d T_rostool_pendanttool = []() {
     T.matrix() = mat;
     return T;
 }();
+}  // namespace
 
 bool CRXKinematicsPlugin::initialize(rclcpp::Node::SharedPtr const& node,
                                      moveit::core::RobotModel const& robot_model,
@@ -76,7 +80,8 @@ bool CRXKinematicsPlugin::initialize(rclcpp::Node::SharedPtr const& node,
 bool CRXKinematicsPlugin::DoIK(const geometry_msgs::msg::Pose& ik_pose,
                                std::vector<double>& solution,
                                moveit_msgs::msg::MoveItErrorCodes& error_code,
-                               const std::vector<double>& reference_joint_values) const
+                               const std::vector<double>& reference_joint_values,
+                               const IKCallbackFn& solution_callback) const
 {
     Eigen::Isometry3d T_R0_rostool;
     tf2::fromMsg(ik_pose, T_R0_rostool);
@@ -88,16 +93,39 @@ bool CRXKinematicsPlugin::DoIK(const geometry_msgs::msg::Pose& ik_pose,
     // Abbes and Poisson.
     const Eigen::Isometry3d T_R0_tool = T_R0_rostool * T_rostool_pendanttool;
 
+    // Find all IK solutions
     const std::vector<std::array<double, 6>> ik_solutions = robot_.ik(T_R0_tool);
 
-    if (ik_solutions.empty())
+    // Filter by used-defined callback (e.g. for collision checking)
+    std::vector<std::vector<double>> valid_ik_solutions;
+    valid_ik_solutions.reserve(ik_solutions.size());
+    for (const auto& ik_sol : ik_solutions)
+    {
+        const auto ik_sol_vec = std::vector<double>(ik_sol.begin(), ik_sol.end());
+
+        moveit_msgs::msg::MoveItErrorCodes error_code;
+        solution_callback ? solution_callback(ik_pose, ik_sol_vec, error_code) :
+                            [&error_code]() { error_code.val = error_code.SUCCESS; }();
+        if (error_code.val == error_code.SUCCESS)
+        {
+            valid_ik_solutions.push_back(std::move(ik_sol_vec));
+        }
+    }
+
+    RCLCPP_DEBUG(moveit::getLogger("crx_kinematics"),
+                 "solutions: %lu->%lu",
+                 ik_solutions.size(),
+                 valid_ik_solutions.size());
+
+    if (valid_ik_solutions.empty())
     {
         error_code.val = moveit_msgs::msg::MoveItErrorCodes::NO_IK_SOLUTION;
         return false;
     }
 
-    const auto& ik_solution = *std::ranges::min_element(
-        ik_solutions,  // See https://en.cppreference.com/w/cpp/algorithm/ranges/min_element.html
+    // Choose the IK solution closest to the seed (reference) state
+    solution = *std::ranges::min_element(
+        valid_ik_solutions,  // https://en.cppreference.com/w/cpp/algorithm/ranges/min_element.html
         std::ranges::less{},
         // Projection
         [reference_joint_values](const auto& ik_sol) {
@@ -109,13 +137,6 @@ bool CRXKinematicsPlugin::DoIK(const geometry_msgs::msg::Pose& ik_pose,
                    std::abs(ik_sol[5] - reference_joint_values[5]);
         });
 
-    solution.clear();
-    solution.push_back(ik_solution[0]);
-    solution.push_back(ik_solution[1]);
-    solution.push_back(ik_solution[2] + ik_solution[1]);  // "Undo" the J2/J3 coupling
-    solution.push_back(ik_solution[3]);
-    solution.push_back(ik_solution[4]);
-    solution.push_back(ik_solution[5]);
     error_code.val = moveit_msgs::msg::MoveItErrorCodes::SUCCESS;
 
     return true;
@@ -161,7 +182,7 @@ bool CRXKinematicsPlugin::searchPositionIK(const geometry_msgs::msg::Pose& ik_po
                                            moveit_msgs::msg::MoveItErrorCodes& error_code,
                                            const kinematics::KinematicsQueryOptions& options) const
 {
-    return DoIK(ik_pose, solution, error_code, ik_seed_state);
+    return DoIK(ik_pose, solution, error_code, ik_seed_state, solution_callback);
 }
 
 bool CRXKinematicsPlugin::searchPositionIK(const geometry_msgs::msg::Pose& ik_pose,
@@ -173,7 +194,7 @@ bool CRXKinematicsPlugin::searchPositionIK(const geometry_msgs::msg::Pose& ik_po
                                            moveit_msgs::msg::MoveItErrorCodes& error_code,
                                            const kinematics::KinematicsQueryOptions& options) const
 {
-    return DoIK(ik_pose, solution, error_code, ik_seed_state);
+    return DoIK(ik_pose, solution, error_code, ik_seed_state, solution_callback);
 }
 
 bool CRXKinematicsPlugin::getPositionFK(const std::vector<std::string>& link_names,
@@ -194,14 +215,7 @@ bool CRXKinematicsPlugin::getPositionIK(const std::vector<geometry_msgs::msg::Po
                                         kinematics::KinematicsResult& result,
                                         const kinematics::KinematicsQueryOptions& options) const
 {
-    solutions.clear();
-    for (std::size_t i = 0u; i < ik_poses.size(); ++i)
-    {
-        solutions.push_back({ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 });
-    }
-    result.kinematic_error = kinematics::KinematicError::OK;
-    result.solution_percentage = 1.0;
-    return true;
+    return false;  // This is for robots with multiple tip links, not applicable to this plugin.
 }
 
 std::vector<std::string> const& CRXKinematicsPlugin::getJointNames() const

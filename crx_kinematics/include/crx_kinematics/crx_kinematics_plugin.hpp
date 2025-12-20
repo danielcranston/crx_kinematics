@@ -19,7 +19,8 @@ class CRXKinematicsPlugin : public kinematics::KinematicsBase
     bool DoIK(const geometry_msgs::msg::Pose& ik_pose,
               std::vector<double>& solution,
               moveit_msgs::msg::MoveItErrorCodes& error_code,
-              const std::vector<double>& reference_joint_values) const;
+              const std::vector<double>& reference_joint_values,
+              const IKCallbackFn& solution_callback = IKCallbackFn()) const;
 
     // Virtual function override boilerplate below
 
