@@ -1,5 +1,7 @@
 #include "crx_kinematics/crx_kinematics_plugin.hpp"
 
+#include <algorithm>
+
 #include <moveit/robot_model/robot_model.hpp>
 #include <pluginlib/class_list_macros.hpp>
 #include <tf2_eigen/tf2_eigen.hpp>
@@ -73,7 +75,8 @@ bool CRXKinematicsPlugin::initialize(rclcpp::Node::SharedPtr const& node,
 
 bool CRXKinematicsPlugin::DoIK(const geometry_msgs::msg::Pose& ik_pose,
                                std::vector<double>& solution,
-                               moveit_msgs::msg::MoveItErrorCodes& error_code) const
+                               moveit_msgs::msg::MoveItErrorCodes& error_code,
+                               const std::vector<double>& reference_joint_values) const
 {
     Eigen::Isometry3d T_R0_rostool;
     tf2::fromMsg(ik_pose, T_R0_rostool);
@@ -93,7 +96,18 @@ bool CRXKinematicsPlugin::DoIK(const geometry_msgs::msg::Pose& ik_pose,
         return false;
     }
 
-    const auto& ik_solution = ik_solutions[0];  // Arbitrarily
+    const auto& ik_solution = *std::ranges::min_element(
+        ik_solutions,  // See https://en.cppreference.com/w/cpp/algorithm/ranges/min_element.html
+        std::ranges::less{},
+        // Projection
+        [reference_joint_values](const auto& ik_sol) {
+            return std::abs(ik_sol[0] - reference_joint_values[0]) +              //
+                   std::abs(ik_sol[1] - reference_joint_values[1]) +              //
+                   std::abs(ik_sol[2] + ik_sol[1] - reference_joint_values[2]) +  // J2/J3 coupling
+                   std::abs(ik_sol[3] - reference_joint_values[3]) +              //
+                   std::abs(ik_sol[4] - reference_joint_values[4]) +              //
+                   std::abs(ik_sol[5] - reference_joint_values[5]);
+        });
 
     solution.clear();
     solution.push_back(ik_solution[0]);
@@ -115,7 +129,7 @@ bool CRXKinematicsPlugin::getPositionIK(const geometry_msgs::msg::Pose& ik_pose,
                                         moveit_msgs::msg::MoveItErrorCodes& error_code,
                                         const kinematics::KinematicsQueryOptions& options) const
 {
-    return DoIK(ik_pose, solution, error_code);
+    return DoIK(ik_pose, solution, error_code, ik_seed_state);
 }
 
 bool CRXKinematicsPlugin::searchPositionIK(const geometry_msgs::msg::Pose& ik_pose,
@@ -125,7 +139,7 @@ bool CRXKinematicsPlugin::searchPositionIK(const geometry_msgs::msg::Pose& ik_po
                                            moveit_msgs::msg::MoveItErrorCodes& error_code,
                                            const kinematics::KinematicsQueryOptions& options) const
 {
-    return DoIK(ik_pose, solution, error_code);
+    return DoIK(ik_pose, solution, error_code, ik_seed_state);
 }
 
 bool CRXKinematicsPlugin::searchPositionIK(const geometry_msgs::msg::Pose& ik_pose,
@@ -136,7 +150,7 @@ bool CRXKinematicsPlugin::searchPositionIK(const geometry_msgs::msg::Pose& ik_po
                                            moveit_msgs::msg::MoveItErrorCodes& error_code,
                                            const kinematics::KinematicsQueryOptions& options) const
 {
-    return DoIK(ik_pose, solution, error_code);
+    return DoIK(ik_pose, solution, error_code, ik_seed_state);
 }
 
 bool CRXKinematicsPlugin::searchPositionIK(const geometry_msgs::msg::Pose& ik_pose,
@@ -147,7 +161,7 @@ bool CRXKinematicsPlugin::searchPositionIK(const geometry_msgs::msg::Pose& ik_po
                                            moveit_msgs::msg::MoveItErrorCodes& error_code,
                                            const kinematics::KinematicsQueryOptions& options) const
 {
-    return DoIK(ik_pose, solution, error_code);
+    return DoIK(ik_pose, solution, error_code, ik_seed_state);
 }
 
 bool CRXKinematicsPlugin::searchPositionIK(const geometry_msgs::msg::Pose& ik_pose,
@@ -159,7 +173,7 @@ bool CRXKinematicsPlugin::searchPositionIK(const geometry_msgs::msg::Pose& ik_po
                                            moveit_msgs::msg::MoveItErrorCodes& error_code,
                                            const kinematics::KinematicsQueryOptions& options) const
 {
-    return DoIK(ik_pose, solution, error_code);
+    return DoIK(ik_pose, solution, error_code, ik_seed_state);
 }
 
 bool CRXKinematicsPlugin::getPositionFK(const std::vector<std::string>& link_names,
