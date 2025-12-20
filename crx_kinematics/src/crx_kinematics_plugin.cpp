@@ -124,18 +124,21 @@ bool CRXKinematicsPlugin::DoIK(const geometry_msgs::msg::Pose& ik_pose,
     }
 
     // Choose the IK solution closest to the seed (reference) state
-    solution = *std::ranges::min_element(
-        valid_ik_solutions,  // https://en.cppreference.com/w/cpp/algorithm/ranges/min_element.html
-        std::ranges::less{},
-        // Projection
-        [reference_joint_values](const auto& ik_sol) {
-            return std::abs(ik_sol[0] - reference_joint_values[0]) +  //
-                   std::abs(ik_sol[1] - reference_joint_values[1]) +  //
-                   std::abs(ik_sol[2] - reference_joint_values[2]) +  //
-                   std::abs(ik_sol[3] - reference_joint_values[3]) +  //
-                   std::abs(ik_sol[4] - reference_joint_values[4]) +  //
-                   std::abs(ik_sol[5] - reference_joint_values[5]);
-        });
+    solution =
+        reference_joint_values.size() != 6 ?
+            valid_ik_solutions[0] :
+            *std::ranges::min_element(
+                valid_ik_solutions,  // https://en.cppreference.com/w/cpp/algorithm/ranges/min_element.html
+                std::ranges::less{},
+                // Projection
+                [reference_joint_values](const auto& ik_sol) {
+                    return std::abs(ik_sol[0] - reference_joint_values[0]) +  //
+                           std::abs(ik_sol[1] - reference_joint_values[1]) +  //
+                           std::abs(ik_sol[2] - reference_joint_values[2]) +  //
+                           std::abs(ik_sol[3] - reference_joint_values[3]) +  //
+                           std::abs(ik_sol[4] - reference_joint_values[4]) +  //
+                           std::abs(ik_sol[5] - reference_joint_values[5]);
+                });
 
     error_code.val = moveit_msgs::msg::MoveItErrorCodes::SUCCESS;
 
