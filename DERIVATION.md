@@ -10,8 +10,10 @@ Some details about the FK implementation and coordinate frames differ from [the 
 * Takes into account the "J2/J3 coupling", replicating the behavior on the Fanuc controller.
   - In short, J3=0 means a horizontal forearm, regardless of the angle of the upper arm.
   - The official Fanuc URDFs do not replicate this behavior (it would require adding a mimic joint between J2 and J3).
-  - Care should be taken when interpreting the J3 angle (subtract J2 to obtain the non-coupled value)
-* The placement of the link frames differ from the official Fanuc URDF descriptions
+  - Care should be taken when interpreting the J3 angle (add J2 to obtain the non-coupled value).
+* The tool frame orientation is defined to be consistent with the Fanuc controller: "Z forward, X up".
+  - In contrast, the official URDFs use "X forward, Y up" (identical to the base frame orientation).
+* The placement of the link frames differ from the official Fanuc URDF descriptions.
   - The Z-axes always correspond to the direction of positive rotation.
   - More importantly, the placements of L3, L4 and L5 are quite crucial to follow along with the derivation of the approach.
 
