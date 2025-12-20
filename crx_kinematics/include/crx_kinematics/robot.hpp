@@ -71,12 +71,19 @@ class CRXRobot
 {
   public:
     CRXRobot();
-    CRXRobot(const RobotNameEnum& robot_name);
+    CRXRobot(const RobotNameEnum& robot_name, const bool couple_j2_j3 = true);
     Eigen::Isometry3d fk(const std::array<double, 6>& joint_values) const;
     std::vector<std::array<double, 6>> ik(const Eigen::Isometry3d& desired_pose) const;
 
   private:
     std::array<DHParams, 6> dh_params;
+    bool couple_j2_j3;  // Whether to couple J2/J3 (like the Fanuc controller and paper does), or
+                        // leave them independent (like the official Fanuc URDFs do). If coupled,
+                        // J3=0 will always correspond to a horizontal forearm, regardless of the
+                        // value of J2.
+                        // Note: The internals follow the paper (so calculates a coupled J3 value).
+                        //       This bool thus governs what conversions should happen as pre/post
+                        //       processing within the fk and ik functions.
 };
 
 std::array<double, 6> to_xyzwpr(const Eigen::Isometry3d& T);

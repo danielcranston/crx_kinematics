@@ -233,7 +233,7 @@ std::array<double, 6> determine_joint_values(const Eigen::Vector3d& O3,
     const double J3 = std::atan2(O_1_4.z() - O_1_3.z(), O_1_4.x() - O_1_3.x());
 
     const auto T_L2_L1 = dh_params[1].T(J2).inverse();
-    const auto T_L3_L2 = dh_params[2].T(J2 + J3).inverse();  // Handle Fanuc J2/J3 coupling
+    const auto T_L3_L2 = dh_params[2].T(J2 + J3).inverse();  // Fanuc J2/J3 coupling
 
     const auto T_L3_L0 = T_L3_L2 * T_L2_L1 * T_L1_L0;
     const auto O_3_5 = T_L3_L0 * O5;
@@ -309,19 +309,23 @@ Eigen::Isometry3d DHParams::T(double joint_value) const
     return out;
 }
 
-CRXRobot::CRXRobot() : dh_params(crx10ia_params())
+CRXRobot::CRXRobot() : dh_params(crx10ia_params()), couple_j2_j3(true)
 {
 }
 
-CRXRobot::CRXRobot(const RobotNameEnum& robot_name) : dh_params(get_dh_params(robot_name))
+CRXRobot::CRXRobot(const RobotNameEnum& robot_name, const bool couple_j2_j3)
+  : dh_params(get_dh_params(robot_name)), couple_j2_j3(couple_j2_j3)
 {
 }
 
 Eigen::Isometry3d CRXRobot::fk(const std::array<double, 6>& joint_values) const
 {
+    // Handle Fanuc J2/J3 coupling
+    const double J3 = couple_j2_j3 ? joint_values[2] + joint_values[1] : joint_values[2];
+
     Eigen::Isometry3d out = dh_params[0].T(joint_values[0]);
     out = out * dh_params[1].T(joint_values[1]);
-    out = out * dh_params[2].T(joint_values[2] + joint_values[1]);  // Handle Fanuc J2/J3 coupling
+    out = out * dh_params[2].T(J3);
     out = out * dh_params[3].T(joint_values[3]);
     out = out * dh_params[4].T(joint_values[4]);
     out = out * dh_params[5].T(joint_values[5]);
@@ -414,6 +418,14 @@ std::vector<std::array<double, 6>> CRXRobot::ik(const Eigen::Isometry3d& desired
             sol[5],
         };
         solutions.push_back(dual);
+    }
+
+    if (!couple_j2_j3)
+    {
+        for (auto& sol : solutions)
+        {
+            sol[2] = sol[2] + sol[1];  // Handle J2/J3 coupling
+        }
     }
 
     return solutions;

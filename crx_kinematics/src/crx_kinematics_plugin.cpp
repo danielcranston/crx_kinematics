@@ -63,7 +63,7 @@ bool CRXKinematicsPlugin::initialize(rclcpp::Node::SharedPtr const& node,
 
     if (const auto& it = model_map.find(robot_model.getName()); it != model_map.end())
     {
-        robot_ = crx_kinematics::CRXRobot(it->second.first);
+        robot_ = crx_kinematics::CRXRobot(it->second.first, /*couple_j2_j3=*/false);
         base_j1_height_ = it->second.second;
     }
     else
@@ -129,11 +129,11 @@ bool CRXKinematicsPlugin::DoIK(const geometry_msgs::msg::Pose& ik_pose,
         std::ranges::less{},
         // Projection
         [reference_joint_values](const auto& ik_sol) {
-            return std::abs(ik_sol[0] - reference_joint_values[0]) +              //
-                   std::abs(ik_sol[1] - reference_joint_values[1]) +              //
-                   std::abs(ik_sol[2] + ik_sol[1] - reference_joint_values[2]) +  // J2/J3 coupling
-                   std::abs(ik_sol[3] - reference_joint_values[3]) +              //
-                   std::abs(ik_sol[4] - reference_joint_values[4]) +              //
+            return std::abs(ik_sol[0] - reference_joint_values[0]) +  //
+                   std::abs(ik_sol[1] - reference_joint_values[1]) +  //
+                   std::abs(ik_sol[2] - reference_joint_values[2]) +  //
+                   std::abs(ik_sol[3] - reference_joint_values[3]) +  //
+                   std::abs(ik_sol[4] - reference_joint_values[4]) +  //
                    std::abs(ik_sol[5] - reference_joint_values[5]);
         });
 
