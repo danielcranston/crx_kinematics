@@ -56,6 +56,11 @@ void assert_fk_ik_round_trip(const crx_kinematics::CRXKinematicsPlugin& plugin,
     ASSERT_NEAR(fk_poses[0].position.y, expected_fk_position.y, 1e-6);
     ASSERT_NEAR(fk_poses[0].position.z, expected_fk_position.z, 1e-6);
 
+    const auto expected_fk_quat = Eigen::Quaterniond(0, 1 / std::sqrt(2), 0, 1 / std::sqrt(2));
+    Eigen::Quaterniond quat;
+    tf2::fromMsg(fk_poses[0].orientation, quat);
+    ASSERT_NEAR(quat.angularDistance(expected_fk_quat), 0.0, 1e-6);
+
     // Compute IK, confirm that it succeeds to find a solution
     moveit_msgs::msg::MoveItErrorCodes error_code;
     std::vector<double> solution;
@@ -75,6 +80,16 @@ void assert_fk_ik_round_trip(const crx_kinematics::CRXKinematicsPlugin& plugin,
     ASSERT_NEAR(fk_poses_again[0].orientation.w, fk_poses[0].orientation.w, 1e-6);
 }
 
+void assert_no_ik_for_unreachable_pose(const crx_kinematics::CRXKinematicsPlugin& plugin)
+{
+    geometry_msgs::msg::Pose unreachable_pose;
+    unreachable_pose.position.x = 100.0;
+    moveit_msgs::msg::MoveItErrorCodes error_code;
+    std::vector<double> solution;
+    plugin.getPositionIK({ unreachable_pose }, {}, solution, error_code);
+    EXPECT_EQ(error_code.val, moveit_msgs::msg::MoveItErrorCodes::NO_IK_SOLUTION);
+}
+
 TEST(CrxKinematicsPluginTest, test_plugin_crx10ia)
 {
     geometry_msgs::msg::Point expected_fk_position;
@@ -82,6 +97,7 @@ TEST(CrxKinematicsPluginTest, test_plugin_crx10ia)
     expected_fk_position.y = -0.15;
     expected_fk_position.z = 0.245 + 0.54;  // base_to_R0 + R0_to_position_height
     assert_fk_ik_round_trip(make_plugin("crx10ia"), expected_fk_position);
+    assert_no_ik_for_unreachable_pose(make_plugin("crx10ia"));
 }
 
 TEST(CrxKinematicsPluginTest, test_plugin_crx30ia)
@@ -91,6 +107,7 @@ TEST(CrxKinematicsPluginTest, test_plugin_crx30ia)
     expected_fk_position.y = -0.185;
     expected_fk_position.z = 0.37 + 0.95;  // base_to_R0 + R0_to_position_height
     assert_fk_ik_round_trip(make_plugin("crx30ia"), expected_fk_position);
+    assert_no_ik_for_unreachable_pose(make_plugin("crx10ia"));
 }
 
 int main(int argc, char** argv)
