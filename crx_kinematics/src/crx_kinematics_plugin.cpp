@@ -230,7 +230,7 @@ bool CRXKinematicsPlugin::getPositionFK(const std::vector<std::string>& link_nam
     // Translate to put the pose in base frame, not R0 frame.
     T_R0_tool.translation().z() += base_j1_height_;
 
-    geometry_msgs::msg::Pose fk_pose = Eigen::toMsg(T_R0_tool);
+    geometry_msgs::msg::Pose fk_pose = Eigen::toMsg(T_R0_tool * T_rostool_pendanttool.inverse());
 
     poses.clear();
     poses.push_back(fk_pose);

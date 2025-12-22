@@ -56,7 +56,8 @@ void assert_fk_ik_round_trip(const crx_kinematics::CRXKinematicsPlugin& plugin,
     ASSERT_NEAR(fk_poses[0].position.y, expected_fk_position.y, 1e-6);
     ASSERT_NEAR(fk_poses[0].position.z, expected_fk_position.z, 1e-6);
 
-    const auto expected_fk_quat = Eigen::Quaterniond(0, 1 / std::sqrt(2), 0, 1 / std::sqrt(2));
+    // Note: Official URDFs have base frame orientation identical to tip frame
+    const auto expected_fk_quat = Eigen::Quaterniond(/*w=*/1, 0, 0, 0);
     Eigen::Quaterniond quat;
     tf2::fromMsg(fk_poses[0].orientation, quat);
     ASSERT_NEAR(quat.angularDistance(expected_fk_quat), 0.0, 1e-6);
@@ -92,22 +93,24 @@ void assert_no_ik_for_unreachable_pose(const crx_kinematics::CRXKinematicsPlugin
 
 TEST(CrxKinematicsPluginTest, test_plugin_crx10ia)
 {
+    const auto plugin = make_plugin("crx10ia");
     geometry_msgs::msg::Point expected_fk_position;
     expected_fk_position.x = 0.7;
     expected_fk_position.y = -0.15;
     expected_fk_position.z = 0.245 + 0.54;  // base_to_R0 + R0_to_position_height
-    assert_fk_ik_round_trip(make_plugin("crx10ia"), expected_fk_position);
-    assert_no_ik_for_unreachable_pose(make_plugin("crx10ia"));
+    assert_fk_ik_round_trip(plugin, expected_fk_position);
+    assert_no_ik_for_unreachable_pose(plugin);
 }
 
 TEST(CrxKinematicsPluginTest, test_plugin_crx30ia)
 {
+    const auto plugin = make_plugin("crx30ia");
     geometry_msgs::msg::Point expected_fk_position;
     expected_fk_position.x = 0.93;
     expected_fk_position.y = -0.185;
     expected_fk_position.z = 0.37 + 0.95;  // base_to_R0 + R0_to_position_height
-    assert_fk_ik_round_trip(make_plugin("crx30ia"), expected_fk_position);
-    assert_no_ik_for_unreachable_pose(make_plugin("crx10ia"));
+    assert_fk_ik_round_trip(plugin, expected_fk_position);
+    assert_no_ik_for_unreachable_pose(plugin);
 }
 
 int main(int argc, char** argv)
