@@ -12,6 +12,8 @@ Compared to general optimization-based IK solvers like KDL, the implementation i
 
 The approach reduces the IK problem to a 1-D search for zeros over a scalar function. See [DERIVATION.md](DERIVATION.md) for an overview of the approach.
 
+The C++ package also hosts a Moveit 2 Kinematics plugin that is compatible out of the box with [the official Fanuc URDF descriptions](https://github.com/FANUC-CORPORATION/fanuc_description/).
+
 # Examples
 
 The Python package comes with a interactive demo:
@@ -43,6 +45,18 @@ pose: np.ndarray = robot.fk([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 
 joint_solutions, debug_data = robot.ik(pose)
 ```
+
+## Moveit 2 Kinematics Plugin
+
+To use the Moveit 2 Kinematics plugin, build the `crx_kinematics` package in your workspace, then edit the [kinematics.yaml](https://github.com/FANUC-CORPORATION/fanuc_driver/blob/eb3093c/fanuc_moveit_config/config/kinematics.yaml#L7) file of your Moveit 2 config package to use the plugin:
+
+```diff
+manipulator:
+-  kinematics_solver: kdl_kinematics_plugin/KDLKinematicsPlugin
++  kinematics_solver: crx_kinematics/CRXKinematicsPlugin
+```
+
+The plugin also works with custom URDFs, provided their base and tip frames, as well as the name of the URDF, match the equivalent URDF from Fanuc.
 
 # Cloning and building
 
