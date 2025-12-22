@@ -58,6 +58,8 @@ manipulator:
 
 The plugin also works with custom URDFs, provided their base and tip frames, as well as the name of the URDF, match the equivalent URDF from Fanuc.
 
+Note that the Fanuc official driver does not yet support ROS 2 Jazzy/Kilted (which are the only distros this plugin currently supports), so using the _controllers_ provided in the Fanuc driver repo (e.g. `ScaledJointTrajectoryController`) does not work out of the box. I intend to backport this plugin to Humble, and hopefully Fanuc will add support for Jazzy/Kilted.
+
 # Cloning and building
 
 Using standard ROS 2 steps:
