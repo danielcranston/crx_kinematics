@@ -25,7 +25,7 @@ const Eigen::Isometry3d T_rostool_pendanttool = []() {
 }();
 }  // namespace
 
-bool CRXKinematicsPlugin::initialize(rclcpp::Node::SharedPtr const& node,
+bool CRXKinematicsPlugin::initialize(rclcpp::Node::SharedPtr const& /*node*/,
                                      moveit::core::RobotModel const& robot_model,
                                      std::string const& group_name,
                                      std::string const& base_frame,
@@ -150,51 +150,55 @@ bool CRXKinematicsPlugin::getPositionIK(const geometry_msgs::msg::Pose& ik_pose,
                                         const std::vector<double>& ik_seed_state,
                                         std::vector<double>& solution,
                                         moveit_msgs::msg::MoveItErrorCodes& error_code,
-                                        const kinematics::KinematicsQueryOptions& options) const
+                                        const kinematics::KinematicsQueryOptions& /*options*/) const
 {
     return DoIK(ik_pose, solution, error_code, ik_seed_state);
 }
 
-bool CRXKinematicsPlugin::searchPositionIK(const geometry_msgs::msg::Pose& ik_pose,
-                                           const std::vector<double>& ik_seed_state,
-                                           double timeout,
-                                           std::vector<double>& solution,
-                                           moveit_msgs::msg::MoveItErrorCodes& error_code,
-                                           const kinematics::KinematicsQueryOptions& options) const
+bool CRXKinematicsPlugin::searchPositionIK(
+    const geometry_msgs::msg::Pose& ik_pose,
+    const std::vector<double>& ik_seed_state,
+    double /*timeout*/,
+    std::vector<double>& solution,
+    moveit_msgs::msg::MoveItErrorCodes& error_code,
+    const kinematics::KinematicsQueryOptions& /*options*/) const
 {
     return DoIK(ik_pose, solution, error_code, ik_seed_state);
 }
 
-bool CRXKinematicsPlugin::searchPositionIK(const geometry_msgs::msg::Pose& ik_pose,
-                                           const std::vector<double>& ik_seed_state,
-                                           double timeout,
-                                           const std::vector<double>& consistency_limits,
-                                           std::vector<double>& solution,
-                                           moveit_msgs::msg::MoveItErrorCodes& error_code,
-                                           const kinematics::KinematicsQueryOptions& options) const
+bool CRXKinematicsPlugin::searchPositionIK(
+    const geometry_msgs::msg::Pose& ik_pose,
+    const std::vector<double>& ik_seed_state,
+    double /*timeout*/,
+    const std::vector<double>& /*consistency_limits*/,
+    std::vector<double>& solution,
+    moveit_msgs::msg::MoveItErrorCodes& error_code,
+    const kinematics::KinematicsQueryOptions& /*options*/) const
 {
     return DoIK(ik_pose, solution, error_code, ik_seed_state);
 }
 
-bool CRXKinematicsPlugin::searchPositionIK(const geometry_msgs::msg::Pose& ik_pose,
-                                           const std::vector<double>& ik_seed_state,
-                                           double timeout,
-                                           std::vector<double>& solution,
-                                           const IKCallbackFn& solution_callback,
-                                           moveit_msgs::msg::MoveItErrorCodes& error_code,
-                                           const kinematics::KinematicsQueryOptions& options) const
+bool CRXKinematicsPlugin::searchPositionIK(
+    const geometry_msgs::msg::Pose& ik_pose,
+    const std::vector<double>& ik_seed_state,
+    double /*timeout*/,
+    std::vector<double>& solution,
+    const IKCallbackFn& solution_callback,
+    moveit_msgs::msg::MoveItErrorCodes& error_code,
+    const kinematics::KinematicsQueryOptions& /*options*/) const
 {
     return DoIK(ik_pose, solution, error_code, ik_seed_state, solution_callback);
 }
 
-bool CRXKinematicsPlugin::searchPositionIK(const geometry_msgs::msg::Pose& ik_pose,
-                                           const std::vector<double>& ik_seed_state,
-                                           double timeout,
-                                           const std::vector<double>& consistency_limits,
-                                           std::vector<double>& solution,
-                                           const IKCallbackFn& solution_callback,
-                                           moveit_msgs::msg::MoveItErrorCodes& error_code,
-                                           const kinematics::KinematicsQueryOptions& options) const
+bool CRXKinematicsPlugin::searchPositionIK(
+    const geometry_msgs::msg::Pose& ik_pose,
+    const std::vector<double>& ik_seed_state,
+    double /*timeout*/,
+    const std::vector<double>& /*consistency_limits*/,
+    std::vector<double>& solution,
+    const IKCallbackFn& solution_callback,
+    moveit_msgs::msg::MoveItErrorCodes& error_code,
+    const kinematics::KinematicsQueryOptions& /*options*/) const
 {
     return DoIK(ik_pose, solution, error_code, ik_seed_state, solution_callback);
 }
@@ -233,11 +237,11 @@ bool CRXKinematicsPlugin::getPositionFK(const std::vector<std::string>& link_nam
     return true;
 }
 
-bool CRXKinematicsPlugin::getPositionIK(const std::vector<geometry_msgs::msg::Pose>& ik_poses,
-                                        const std::vector<double>& ik_seed_state,
-                                        std::vector<std::vector<double>>& solutions,
-                                        kinematics::KinematicsResult& result,
-                                        const kinematics::KinematicsQueryOptions& options) const
+bool CRXKinematicsPlugin::getPositionIK(const std::vector<geometry_msgs::msg::Pose>& /*ik_poses*/,
+                                        const std::vector<double>& /*ik_seed_state*/,
+                                        std::vector<std::vector<double>>& /*solutions*/,
+                                        kinematics::KinematicsResult& /*result*/,
+                                        const kinematics::KinematicsQueryOptions& /*options*/) const
 {
     return false;  // This is for robots with multiple tip links, not applicable to this plugin.
 }

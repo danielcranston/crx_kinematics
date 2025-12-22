@@ -25,6 +25,8 @@ target_link_libraries(
   PUBLIC moveit_core::moveit_robot_model moveit_core::moveit_kinematics_base
   PRIVATE robot tf2_eigen::tf2_eigen moveit_core::moveit_robot_state
           pluginlib::pluginlib rclcpp::rclcpp)
+target_compile_options(crx_kinematics_plugin PRIVATE -Wall -Wextra -Wpedantic
+                                                     -Werror)
 
 install(DIRECTORY include/ DESTINATION include/crx_kinematics)
 install(
