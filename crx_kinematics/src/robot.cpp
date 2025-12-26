@@ -363,7 +363,7 @@ std::vector<std::array<double, 6>> CRXRobot::ik(const Eigen::Isometry3d& desired
     // Step 2, 3, 4, 5 and 6
     std::vector<std::array<double, 6>> solutions;
     solutions.reserve(16);
-    for (int q_deg = 1; q_deg < 360; ++q_deg)
+    for (int q_deg = 1; q_deg <= 360; ++q_deg)
     {
         auto circle_evaluation = CircleEvaluation(
             static_cast<double>(q_deg) / 180.0 * M_PI, desired_pose, r4, r5, r6, a3, O5);
