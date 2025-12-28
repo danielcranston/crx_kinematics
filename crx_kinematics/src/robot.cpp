@@ -1,7 +1,8 @@
 #include "crx_kinematics/robot.hpp"
+
 #include <cmath>
-#include <iostream>
 #include <fstream>
+#include <iostream>
 #include <limits>
 
 namespace crx_kinematics

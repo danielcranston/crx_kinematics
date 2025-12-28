@@ -1,5 +1,3 @@
-#include "crx_kinematics/crx_kinematics_plugin.hpp"
-
 #include <algorithm>
 #include <filesystem>
 #include <random>
@@ -7,8 +5,10 @@
 #include <gtest/gtest.h>
 #include <moveit/utils/robot_model_test_utils.hpp>
 #include <rclcpp/rclcpp.hpp>
-#include <urdf_parser/urdf_parser.h>
 #include <tf2_eigen/tf2_eigen.hpp>
+#include <urdf_parser/urdf_parser.h>
+
+#include "crx_kinematics/crx_kinematics_plugin.hpp"
 
 std::vector<double> generate_random_joint_values()
 {

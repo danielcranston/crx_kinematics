@@ -36,7 +36,14 @@ PenaltyBreakString: 1
 PenaltyExcessCharacter: 1000
 PenaltyReturnTypeOnItsOwnLine: 90
 PointerBindsToType: true
-SortIncludes: false
+SortIncludes: true
+IncludeCategories:
+    - Regex: "^<[a-z_]+>"
+      Priority: 1
+    - Regex: '^<(.*\.(h|hpp)|[[:alnum:]\/_]*)>'
+      Priority: 2
+    - Regex: '^".*\.(h|hpp)"'
+      Priority: 3
 SpaceAfterControlStatementKeyword: true
 SpaceAfterCStyleCast: false
 SpaceBeforeAssignmentOperators: true
@@ -54,13 +61,13 @@ BreakBeforeBraces: Custom
 
 # Control of individual brace wrapping cases
 BraceWrapping:
-    AfterClass: 'true'
-    AfterControlStatement: 'true'
-    AfterEnum : 'true'
-    AfterFunction : 'true'
-    AfterNamespace : 'true'
-    AfterStruct : 'true'
-    AfterUnion : 'true'
-    BeforeCatch : 'true'
-    BeforeElse : 'true'
-    IndentBraces : 'false'
+    AfterClass: "true"
+    AfterControlStatement: "true"
+    AfterEnum: "true"
+    AfterFunction: "true"
+    AfterNamespace: "true"
+    AfterStruct: "true"
+    AfterUnion: "true"
+    BeforeCatch: "true"
+    BeforeElse: "true"
+    IndentBraces: "false"
