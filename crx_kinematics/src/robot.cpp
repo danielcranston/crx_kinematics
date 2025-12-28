@@ -424,7 +424,7 @@ std::vector<std::array<double, 6>> CRXRobot::ik(const Eigen::Isometry3d& desired
     {
         for (auto& sol : solutions)
         {
-            sol[2] = sol[2] + sol[1];  // Handle J2/J3 coupling
+            sol[2] = harmonize_towards_zero(sol[2] + sol[1]);  // Handle J2/J3 coupling
         }
     }
 

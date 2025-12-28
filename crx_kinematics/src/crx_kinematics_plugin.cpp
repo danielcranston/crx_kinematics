@@ -23,6 +23,14 @@ const Eigen::Isometry3d T_rostool_pendanttool = []() {
     T.matrix() = mat;
     return T;
 }();
+
+double norm(const geometry_msgs::msg::Point& p1, const geometry_msgs::msg::Point& p2)
+{
+    double x_squared = (p1.x - p2.x) * (p1.x - p2.x);
+    double y_squared = (p1.y - p2.y) * (p1.y - p2.y);
+    double z_squared = (p1.z - p2.z) * (p1.z - p2.z);
+    return std::sqrt(x_squared + y_squared + z_squared);
+}
 }  // namespace
 
 bool CRXKinematicsPlugin::initialize(rclcpp::Node::SharedPtr const& /*node*/,
@@ -101,6 +109,16 @@ bool CRXKinematicsPlugin::DoIK(const geometry_msgs::msg::Pose& ik_pose,
     for (const auto& ik_sol : ik_solutions)
     {
         const auto ik_sol_vec = std::vector<double>(ik_sol.begin(), ik_sol.end());
+
+        std::vector<geometry_msgs::msg::Pose> poses;
+        getPositionFK({ getTipFrame() }, ik_sol_vec, poses);
+        if (norm(ik_pose.position, poses[0].position) > 1e-6)
+        {
+            // In rare cases (~0.1%) some IK solutions can have a large error (up to ~3 cm).
+            // The reason isn't known, but one likely culprit is numerical instabilities in
+            // determine_joint_values.
+            continue;
+        }
 
         moveit_msgs::msg::MoveItErrorCodes error_code;
         solution_callback ? solution_callback(ik_pose, ik_sol_vec, error_code) :
