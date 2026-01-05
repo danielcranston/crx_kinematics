@@ -14,11 +14,7 @@ namespace
 // Transform relating the ROS driver "flange" frame orientation convention to the "Pendant" / "Abbes
 // and Poisson" convention. The latter is expected by CRXRobot::ik, hence the need for conversion.
 const Eigen::Isometry3d T_rostool_pendanttool = []() {
-    Eigen::Matrix4d mat;
-    mat << 0, 0, 1, 0,  //
-        0, -1, 0, 0,    //
-        1, 0, 0, 0,     //
-        0, 0, 0, 1;
+    auto mat = Eigen::Matrix4d::Identity();
     Eigen::Isometry3d T;
     T.matrix() = mat;
     return T;
