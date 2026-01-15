@@ -11,6 +11,8 @@ namespace crx_kinematics
 {
 namespace
 {
+const auto LOGGER = []() { return moveit::getLogger("crx_kinematics"); };
+
 // Transform relating the ROS driver "flange" frame orientation convention to the "Pendant" / "Abbes
 // and Poisson" convention. The latter is expected by CRXRobot::ik, hence the need for conversion.
 const Eigen::Isometry3d T_rostool_pendanttool = []() {
@@ -42,22 +44,24 @@ bool CRXKinematicsPlugin::initialize(rclcpp::Node::SharedPtr const& /*node*/,
 {
     storeValues(robot_model, group_name, base_frame, tip_frames, search_discretization);
 
+    if (tip_frames.size() != 1)
+    {
+        RCLCPP_INFO(LOGGER(), "Only 1 tip frame is supported. Model has '%lu", tip_frames.size());
+        return false;
+    }
+
     const moveit::core::JointModelGroup* jmg = robot_model_->getJointModelGroup(group_name);
 
     joint_names_ = jmg->getJointModelNames();
     link_names_.push_back(getTipFrame());
+    RCLCPP_INFO(LOGGER(), "model_name: '%s'", robot_model.getName().c_str());
 
-    RCLCPP_INFO(
-        moveit::getLogger("crx_kinematics"), "model_name: '%s'", robot_model.getName().c_str());
-
-    RCLCPP_INFO(moveit::getLogger("crx_kinematics"),
-                "model_frame: '%s'",
-                robot_model.getModelFrame().c_str());
-    RCLCPP_INFO(moveit::getLogger("crx_kinematics"), "tip_frame: '%s'", getTipFrame().c_str());
-    RCLCPP_INFO(moveit::getLogger("crx_kinematics"), "base_frame: '%s'", base_frame_.c_str());
+    RCLCPP_INFO(LOGGER(), "model_frame: '%s'", robot_model.getModelFrame().c_str());
+    RCLCPP_INFO(LOGGER(), "tip_frame: '%s'", getTipFrame().c_str());
+    RCLCPP_INFO(LOGGER(), "base_frame: '%s'", base_frame_.c_str());
     for (const auto& name : joint_names_)
     {
-        RCLCPP_DEBUG(moveit::getLogger("crx_kinematics"), "joint name: '%s'", name.c_str());
+        RCLCPP_DEBUG(LOGGER(), "joint name: '%s'", name.c_str());
     }
 
     std::map<std::string, std::pair<crx_kinematics::RobotNameEnum, double>> model_map = {
@@ -75,9 +79,7 @@ bool CRXKinematicsPlugin::initialize(rclcpp::Node::SharedPtr const& /*node*/,
     }
     else
     {
-        RCLCPP_ERROR(moveit::getLogger("crx_kinematics"),
-                     "Unexpected model name: '%s'",
-                     robot_model.getName().c_str());
+        RCLCPP_ERROR(LOGGER(), "Unexpected model name: '%s'", robot_model.getName().c_str());
         return false;
     }
 
@@ -129,10 +131,7 @@ bool CRXKinematicsPlugin::DoIK(const geometry_msgs::msg::Pose& ik_pose,
         }
     }
 
-    RCLCPP_DEBUG(moveit::getLogger("crx_kinematics"),
-                 "solutions: %lu->%lu",
-                 ik_solutions.size(),
-                 valid_ik_solutions.size());
+    RCLCPP_DEBUG(LOGGER(), "solutions: %lu->%lu", ik_solutions.size(), valid_ik_solutions.size());
 
     if (valid_ik_solutions.empty())
     {
@@ -227,16 +226,14 @@ bool CRXKinematicsPlugin::getPositionFK(const std::vector<std::string>& link_nam
 {
     if (!(link_names.size() == 1 && link_names[0] == getTipFrame()))
     {
-        RCLCPP_ERROR(moveit::getLogger("crx_kinematics"),
+        RCLCPP_ERROR(LOGGER(),
                      "This plugin only supports looking up FK for the tip frame ('%s')",
                      getTipFrame().c_str());
         return false;
     }
     if (joint_angles.size() != 6)
     {
-        RCLCPP_ERROR(moveit::getLogger("crx_kinematics"),
-                     "Expected 6 joint angles for FK, but got %lu",
-                     joint_angles.size());
+        RCLCPP_ERROR(LOGGER(), "Expected 6 joint angles for FK, but got %lu", joint_angles.size());
         return false;
     }
 
