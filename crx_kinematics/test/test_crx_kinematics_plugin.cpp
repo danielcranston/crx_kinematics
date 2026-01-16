@@ -13,7 +13,7 @@
 std::vector<double> generate_random_joint_values()
 {
     auto random_joint_value = []() {
-        static std::uniform_int_distribution<int> distr{ -89, 89 };
+        static std::uniform_int_distribution<int> distr{ -69, 89 };
         static std::mt19937 noise{ 0 };
         return distr(noise) / 180.0 * M_PI;
     };

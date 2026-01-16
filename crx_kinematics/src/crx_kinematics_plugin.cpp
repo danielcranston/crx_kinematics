@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <ranges>
 
+#include <kdl_parser/kdl_parser.hpp>
 #include <moveit/robot_model/robot_model.hpp>
 #include <pluginlib/class_list_macros.hpp>
 #include <tf2_eigen/tf2_eigen.hpp>
@@ -83,7 +84,7 @@ bool CRXKinematicsPlugin::initialize(rclcpp::Node::SharedPtr const& /*node*/,
         return false;
     }
 
-    return true;
+    return extract_joint_limits();
 }
 
 bool CRXKinematicsPlugin::DoIK(const geometry_msgs::msg::Pose& ik_pose,
@@ -105,13 +106,14 @@ bool CRXKinematicsPlugin::DoIK(const geometry_msgs::msg::Pose& ik_pose,
     // Find all IK solutions
     const std::vector<std::array<double, 6>> ik_solutions = robot_.ik(T_R0_tool);
 
-    // Filter by used-defined callback (e.g. for collision checking)
+    // Retain only valid IK solutions. A solution is valid if it fulfils the 3 following criteria:
     std::vector<std::vector<double>> valid_ik_solutions;
     valid_ik_solutions.reserve(ik_solutions.size());
     for (const auto& ik_sol : ik_solutions)
     {
         const auto ik_sol_vec = std::vector<double>(ik_sol.begin(), ik_sol.end());
 
+        // 1: FK on the solution leads exactly to the desired pose
         std::vector<geometry_msgs::msg::Pose> poses;
         getPositionFK({ getTipFrame() }, ik_sol_vec, poses);
         if (norm(ik_pose.position, poses[0].position) > 1e-6)
@@ -122,6 +124,13 @@ bool CRXKinematicsPlugin::DoIK(const geometry_msgs::msg::Pose& ik_pose,
             continue;
         }
 
+        // 2: Respects joint limits
+        if (!respects_joint_limits(ik_sol_vec))
+        {
+            continue;
+        }
+
+        // 3: Survives the user-defined callback (if provided)
         moveit_msgs::msg::MoveItErrorCodes error_code;
         solution_callback ? solution_callback(ik_pose, ik_sol_vec, error_code) :
                             [&error_code]() { error_code.val = error_code.SUCCESS; }();
@@ -160,6 +169,69 @@ bool CRXKinematicsPlugin::DoIK(const geometry_msgs::msg::Pose& ik_pose,
 
     return true;
 }
+
+bool CRXKinematicsPlugin::extract_joint_limits()
+{
+    KDL::Tree tree;
+    if (!kdl_parser::treeFromUrdfModel(*robot_model_->getURDF(), tree))
+    {
+        RCLCPP_ERROR(LOGGER(), "Failed to extract KDL tree from URDF");
+        return false;
+    }
+
+    KDL::Chain chain;
+    if (!tree.getChain(base_frame_, getTipFrame(), chain))
+    {
+        RCLCPP_ERROR(
+            LOGGER(), "No chain from '%s' to '%s'", base_frame_.c_str(), getTipFrame().c_str());
+        return false;
+    }
+
+    if (chain.getNrOfJoints() != 6)
+    {
+        RCLCPP_ERROR(LOGGER(), "Expected a 6 joint chain, but found %i", chain.getNrOfJoints());
+        return false;
+    }
+
+    int joints_traversed = 0;
+    for (const KDL::Segment& segment : chain.segments)
+    {
+        const urdf::JointConstSharedPtr joint =
+            robot_model_->getURDF()->getJoint(segment.getJoint().getName());
+
+        if (joint->type == urdf::Joint::REVOLUTE)
+        {
+            constexpr auto lowest = std::numeric_limits<float>::lowest();
+            constexpr auto highest = std::numeric_limits<float>::max();
+
+            const urdf::JointLimitsSharedPtr limits = joint->limits;
+            joint_limits_min_[joints_traversed] = limits ? limits->lower : lowest;
+            joint_limits_max_[joints_traversed] = limits ? limits->upper : highest;
+
+            ++joints_traversed;
+        }
+    }
+
+    if (joints_traversed != 6)
+    {
+        RCLCPP_ERROR(LOGGER(), "Expected to find 6 revolute joints. Found %i", joints_traversed);
+        return false;
+    }
+
+    return true;
+}
+
+bool CRXKinematicsPlugin::respects_joint_limits(const std::vector<double>& solution) const
+{
+    for (std::size_t i = 0; i < solution.size(); ++i)
+    {
+        if (solution[i] > joint_limits_max_[i] || solution[i] < joint_limits_min_[i])
+        {
+            return false;
+        }
+    }
+    return true;
+};
 
 // Virtual function override boilerplate below
 

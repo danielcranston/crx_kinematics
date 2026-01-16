@@ -1,7 +1,7 @@
 #pragma once
-#include "crx_kinematics/robot.hpp"
-
 #include <moveit/kinematics_base/kinematics_base.hpp>
+
+#include "crx_kinematics/robot.hpp"
 
 namespace crx_kinematics
 {
@@ -82,7 +82,12 @@ class CRXKinematicsPlugin : public kinematics::KinematicsBase
     std::vector<std::string> joint_names_;
     std::vector<std::string> link_names_;
     crx_kinematics::CRXRobot robot_;
+    std::array<double, 6> joint_limits_min_;
+    std::array<double, 6> joint_limits_max_;
     double base_j1_height_;
+
+    bool extract_joint_limits();
+    bool respects_joint_limits(const std::vector<double>& solution) const;
 };
 
 }  // namespace crx_kinematics

@@ -11,6 +11,8 @@
   <depend>moveit_core</depend>
   <depend>pluginlib</depend>
   <depend>tf2_eigen</depend>
+  <depend>kdl_parser</depend>
+
 
   <buildtool_depend>ament_cmake_ros</buildtool_depend>
 
