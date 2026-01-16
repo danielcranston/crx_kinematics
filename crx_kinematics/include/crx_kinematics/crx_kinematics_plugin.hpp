@@ -88,6 +88,8 @@ class CRXKinematicsPlugin : public kinematics::KinematicsBase
 
     bool extract_joint_limits();
     bool respects_joint_limits(const std::vector<double>& solution) const;
+    bool reproduces_desired_pose(const std::vector<double>& solution,
+                                 const Eigen::Isometry3d& desired_pose) const;
 };
 
 }  // namespace crx_kinematics

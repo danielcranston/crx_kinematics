@@ -27,13 +27,6 @@ const Eigen::Isometry3d T_rostool_pendanttool = []() {
     return T;
 }();
 
-double norm(const geometry_msgs::msg::Point& p1, const geometry_msgs::msg::Point& p2)
-{
-    double x_squared = (p1.x - p2.x) * (p1.x - p2.x);
-    double y_squared = (p1.y - p2.y) * (p1.y - p2.y);
-    double z_squared = (p1.z - p2.z) * (p1.z - p2.z);
-    return std::sqrt(x_squared + y_squared + z_squared);
-}
 }  // namespace
 
 bool CRXKinematicsPlugin::initialize(rclcpp::Node::SharedPtr const& /*node*/,
@@ -114,13 +107,13 @@ bool CRXKinematicsPlugin::DoIK(const geometry_msgs::msg::Pose& ik_pose,
         const auto ik_sol_vec = std::vector<double>(ik_sol.begin(), ik_sol.end());
 
         // 1: FK on the solution leads exactly to the desired pose
-        std::vector<geometry_msgs::msg::Pose> poses;
-        getPositionFK({ getTipFrame() }, ik_sol_vec, poses);
-        if (norm(ik_pose.position, poses[0].position) > 1e-6)
+        if (!reproduces_desired_pose(ik_sol_vec, T_R0_rostool))
         {
             // In rare cases (~0.1%) some IK solutions can have a large error (up to ~3 cm).
             // The reason isn't known, but one likely culprit is numerical instabilities in
             // determine_joint_values.
+            // I've yet to see any cases where orientation alone has had a large error, but that's
+            // checked for as well (better safe than sorry).
             continue;
         }
 
@@ -232,6 +225,30 @@ bool CRXKinematicsPlugin::respects_joint_limits(const std::vector<double>& solut
     }
     return true;
 };
+
+bool CRXKinematicsPlugin::reproduces_desired_pose(const std::vector<double>& solution,
+                                                  const Eigen::Isometry3d& T_R0_rostool) const
+{
+    std::vector<geometry_msgs::msg::Pose> poses;
+    getPositionFK({ getTipFrame() }, solution, poses);
+
+    Eigen::Isometry3d T_R0_rostoolagain;
+    tf2::fromMsg(poses[0], T_R0_rostoolagain);
+    T_R0_rostoolagain.translation().z() -= base_j1_height_;
+
+    const auto& p1 = T_R0_rostool.translation();
+    const auto& p2 = T_R0_rostoolagain.translation();
+    const auto q1 = Eigen::Quaterniond(T_R0_rostool.linear());
+    const auto q2 = Eigen::Quaterniond(T_R0_rostoolagain.linear());
+
+    const auto position_diff = (p1 - p2).norm();
+    const auto orientation_diff = q1.angularDistance(q2);
+    if (position_diff > 1e-6 || orientation_diff > 0.01 * M_PI / 180)
+    {
+        return false;
+    }
+    return true;
+}
 
 // Virtual function override boilerplate below
 
