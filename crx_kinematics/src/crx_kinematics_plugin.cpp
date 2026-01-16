@@ -241,9 +241,9 @@ bool CRXKinematicsPlugin::reproduces_desired_pose(const std::vector<double>& sol
     const auto q1 = Eigen::Quaterniond(T_R0_rostool.linear());
     const auto q2 = Eigen::Quaterniond(T_R0_rostoolagain.linear());
 
-    const auto position_diff = (p1 - p2).norm();
+    const auto position_diff_squared = (p1 - p2).squaredNorm();
     const auto orientation_diff = q1.angularDistance(q2);
-    if (position_diff > 1e-6 || orientation_diff > 0.01 * M_PI / 180)
+    if (position_diff_squared > 1e-6 * 1e-6 || orientation_diff > 0.01 * M_PI / 180)
     {
         return false;
     }
