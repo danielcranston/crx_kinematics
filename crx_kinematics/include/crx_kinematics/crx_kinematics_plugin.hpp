@@ -86,7 +86,12 @@ class CRXKinematicsPlugin : public kinematics::KinematicsBase
     std::array<double, 6> joint_limits_max_;
     double base_j1_height_;
 
-    bool extract_joint_limits();
+    // Transform relating the URDFs "flange" frame orientation convention to the "Pendant" /
+    // "Abbes and Poisson" convention. The latter is expected by CRXRobot::ik, hence the need for
+    // conversion.
+    Eigen::Isometry3d T_rostool_pendanttool_;
+
+    bool extract_joint_limits_and_tcp_orientation();
     bool respects_joint_limits(const std::vector<double>& solution) const;
     bool reproduces_desired_pose(const std::vector<double>& solution,
                                  const Eigen::Isometry3d& desired_pose) const;

@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <random>
+#include <sstream>
 
 #include <gtest/gtest.h>
 #include <moveit/utils/robot_model_test_utils.hpp>
@@ -12,15 +13,25 @@
 
 std::vector<double> generate_random_joint_values()
 {
-    auto random_joint_value = []() {
-        static std::uniform_int_distribution<int> distr{ -69, 89 };
+    auto random_joint_value = [](const int lower, const int upper) {
+        std::uniform_int_distribution<int> distr{ lower, upper };
         static std::mt19937 noise{ 0 };
         return distr(noise) / 180.0 * M_PI;
     };
 
-    std::vector<double> out;
-    std::generate_n(std::back_inserter(out), 6, random_joint_value);
-    return out;
+    return {
+        random_joint_value(-179, 179),  //
+        random_joint_value(-179, 179),  //
+        random_joint_value(-69, 69),    /* Ensure we stay away from the edge of the robot envelope
+                                         (fully extended or completely folder in towards the base),
+                                         since randomized IK seems unreliable in these areas.
+                                         This can (should be able to) be reverted once `find_zeros`
+                                         is improved to do more than just applying the basic
+                                         Bisection Method.*/
+        random_joint_value(-179, 179),  //
+        random_joint_value(-179, 179),  //
+        random_joint_value(-179, 179)   //
+    };
 }
 
 geometry_msgs::msg::Pose do_fk(const crx_kinematics::CRXKinematicsPlugin& plugin,
@@ -43,6 +54,18 @@ void print(const auto& v)
     for (auto i : v)
         std::cout << i << ' ';
     std::cout << "\n";
+}
+
+std::string to_str(const auto& v)
+{
+    std::stringstream out;
+    out << "[";
+    for (std::size_t i = 0; i < v.size() - 1; ++i)
+    {
+        out << v[i] << ", ";
+    }
+    out << v[v.size() - 1] << "]";
+    return out.str();
 }
 
 std::shared_ptr<moveit::core::RobotModel> load_crx_robot_model(const std::string& robot_name)
@@ -97,14 +120,14 @@ void assert_fk_ik_round_trip(const crx_kinematics::CRXKinematicsPlugin& plugin,
     moveit_msgs::msg::MoveItErrorCodes error_code;
     std::vector<double> solution;
     plugin.getPositionIK(fk_pose, joint_values, solution, error_code);
-    ASSERT_EQ(error_code.val, moveit_msgs::msg::MoveItErrorCodes::SUCCESS);
+    ASSERT_EQ(error_code.val, moveit_msgs::msg::MoveItErrorCodes::SUCCESS) << to_str(joint_values);
 
     const geometry_msgs::msg::Pose fk_pose_again = do_fk(plugin, solution);
 
     const auto [p1, q1] = pose_to_eigen(fk_pose);
     const auto [p2, q2] = pose_to_eigen(fk_pose_again);
-    ASSERT_NEAR((p1 - p2).norm(), 0.0, 1e-6);
-    ASSERT_NEAR(q1.angularDistance(q2), 0.0, 1e-6);
+    ASSERT_NEAR((p1 - p2).norm(), 0.0, 1e-6) << to_str(joint_values);
+    ASSERT_NEAR(q1.angularDistance(q2), 0.0, 1e-6) << to_str(joint_values);
 }
 
 void assert_all_zeros_pose(const crx_kinematics::CRXKinematicsPlugin& plugin,

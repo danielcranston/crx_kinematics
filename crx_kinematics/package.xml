@@ -12,6 +12,7 @@
   <depend>pluginlib</depend>
   <depend>tf2_eigen</depend>
   <depend>kdl_parser</depend>
+  <depend>tf2_eigen_kdl</depend>
 
 
   <buildtool_depend>ament_cmake_ros</buildtool_depend>

@@ -7,25 +7,13 @@
 #include <moveit/robot_model/robot_model.hpp>
 #include <pluginlib/class_list_macros.hpp>
 #include <tf2_eigen/tf2_eigen.hpp>
+#include <tf2_eigen_kdl/tf2_eigen_kdl.hpp>
 
 namespace crx_kinematics
 {
 namespace
 {
 const auto LOGGER = []() { return moveit::getLogger("crx_kinematics"); };
-
-// Transform relating the ROS driver "flange" frame orientation convention to the "Pendant" / "Abbes
-// and Poisson" convention. The latter is expected by CRXRobot::ik, hence the need for conversion.
-const Eigen::Isometry3d T_rostool_pendanttool = []() {
-    Eigen::Matrix4d mat;
-    mat << 0, 0, 1, 0,  //
-        0, -1, 0, 0,    //
-        1, 0, 0, 0,     //
-        0, 0, 0, 1;
-    Eigen::Isometry3d T;
-    T.matrix() = mat;
-    return T;
-}();
 
 }  // namespace
 
@@ -77,7 +65,7 @@ bool CRXKinematicsPlugin::initialize(rclcpp::Node::SharedPtr const& /*node*/,
         return false;
     }
 
-    return extract_joint_limits();
+    return extract_joint_limits_and_tcp_orientation();
 }
 
 bool CRXKinematicsPlugin::DoIK(const geometry_msgs::msg::Pose& ik_pose,
@@ -94,7 +82,7 @@ bool CRXKinematicsPlugin::DoIK(const geometry_msgs::msg::Pose& ik_pose,
 
     // Account for the different definitions of the TCP frame between the Fanuc official URDFs and
     // Abbes and Poisson.
-    const Eigen::Isometry3d T_R0_tool = T_R0_rostool * T_rostool_pendanttool;
+    const Eigen::Isometry3d T_R0_tool = T_R0_rostool * T_rostool_pendanttool_;
 
     // Find all IK solutions
     const std::vector<std::array<double, 6>> ik_solutions = robot_.ik(T_R0_tool);
@@ -163,7 +151,7 @@ bool CRXKinematicsPlugin::DoIK(const geometry_msgs::msg::Pose& ik_pose,
     return true;
 }
 
-bool CRXKinematicsPlugin::extract_joint_limits()
+bool CRXKinematicsPlugin::extract_joint_limits_and_tcp_orientation()
 {
     KDL::Tree tree;
     if (!kdl_parser::treeFromUrdfModel(*robot_model_->getURDF(), tree))
@@ -187,10 +175,13 @@ bool CRXKinematicsPlugin::extract_joint_limits()
     }
 
     int joints_traversed = 0;
+    KDL::Rotation rostool_rotation;
     for (const KDL::Segment& segment : chain.segments)
     {
         const urdf::JointConstSharedPtr joint =
             robot_model_->getURDF()->getJoint(segment.getJoint().getName());
+
+        rostool_rotation = rostool_rotation * segment.getFrameToTip().M;
 
         if (joint->type == urdf::Joint::REVOLUTE)
         {
@@ -210,6 +201,17 @@ bool CRXKinematicsPlugin::extract_joint_limits()
         RCLCPP_ERROR(LOGGER(), "Expected to find 6 revolute joints. Found %i", joints_traversed);
         return false;
     }
+
+    Eigen::Quaterniond rostool_orientation;
+    tf2::quaternionKDLToEigen(rostool_rotation, rostool_orientation);
+
+    const Eigen::Quaterniond pendanttool_orientation =
+        Eigen::AngleAxisd(-M_PI / 2, Eigen::Vector3d::UnitY()) *
+        Eigen::AngleAxisd(M_PI, Eigen::Vector3d::UnitX());
+
+    T_rostool_pendanttool_.translation().setZero();
+    T_rostool_pendanttool_.linear() =
+        Eigen::Matrix3d(rostool_orientation.inverse() * pendanttool_orientation);
 
     return true;
 }
@@ -334,7 +336,7 @@ bool CRXKinematicsPlugin::getPositionFK(const std::vector<std::string>& link_nam
     // Translate to put the pose in base frame, not R0 frame.
     T_R0_tool.translation().z() += base_j1_height_;
 
-    geometry_msgs::msg::Pose fk_pose = Eigen::toMsg(T_R0_tool * T_rostool_pendanttool.inverse());
+    geometry_msgs::msg::Pose fk_pose = Eigen::toMsg(T_R0_tool * T_rostool_pendanttool_.inverse());
 
     poses.clear();
     poses.push_back(fk_pose);
