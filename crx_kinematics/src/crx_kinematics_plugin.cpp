@@ -3,11 +3,10 @@
 #include <algorithm>
 #include <ranges>
 
-#include <kdl_parser/kdl_parser.hpp>
 #include <moveit/robot_model/robot_model.hpp>
+#include <moveit/robot_state/robot_state.hpp>
 #include <pluginlib/class_list_macros.hpp>
 #include <tf2_eigen/tf2_eigen.hpp>
-#include <tf2_eigen_kdl/tf2_eigen_kdl.hpp>
 
 namespace crx_kinematics
 {
@@ -153,40 +152,15 @@ bool CRXKinematicsPlugin::DoIK(const geometry_msgs::msg::Pose& ik_pose,
 
 bool CRXKinematicsPlugin::extract_joint_limits_and_tcp_orientation()
 {
-    KDL::Tree tree;
-    if (!kdl_parser::treeFromUrdfModel(*robot_model_->getURDF(), tree))
-    {
-        RCLCPP_ERROR(LOGGER(), "Failed to extract KDL tree from URDF");
-        return false;
-    }
-
-    KDL::Chain chain;
-    if (!tree.getChain(base_frame_, getTipFrame(), chain))
-    {
-        RCLCPP_ERROR(
-            LOGGER(), "No chain from '%s' to '%s'", base_frame_.c_str(), getTipFrame().c_str());
-        return false;
-    }
-
-    if (chain.getNrOfJoints() != 6)
-    {
-        RCLCPP_ERROR(LOGGER(), "Expected a 6 joint chain, but found %i", chain.getNrOfJoints());
-        return false;
-    }
-
     int joints_traversed = 0;
-    KDL::Rotation rostool_rotation;
-    for (const KDL::Segment& segment : chain.segments)
+    for (const auto& joint_name : joint_names_)
     {
-        const urdf::JointConstSharedPtr joint =
-            robot_model_->getURDF()->getJoint(segment.getJoint().getName());
-
-        rostool_rotation = rostool_rotation * segment.getFrameToTip().M;
+        const urdf::JointConstSharedPtr joint = robot_model_->getURDF()->getJoint(joint_name);
 
         if (joint->type == urdf::Joint::REVOLUTE)
         {
-            constexpr auto lowest = std::numeric_limits<float>::lowest();
-            constexpr auto highest = std::numeric_limits<float>::max();
+            constexpr auto lowest = std::numeric_limits<double>::lowest();
+            constexpr auto highest = std::numeric_limits<double>::max();
 
             const urdf::JointLimitsSharedPtr limits = joint->limits;
             joint_limits_min_[joints_traversed] = limits ? limits->lower : lowest;
@@ -202,13 +176,18 @@ bool CRXKinematicsPlugin::extract_joint_limits_and_tcp_orientation()
         return false;
     }
 
-    Eigen::Quaterniond rostool_orientation;
-    tf2::quaternionKDLToEigen(rostool_rotation, rostool_orientation);
-
+    // The internals of crx_kinematics::CRXRobot expects the tip to be "Z forward, X up" at rest
     const Eigen::Quaterniond pendanttool_orientation =
         Eigen::AngleAxisd(-M_PI / 2, Eigen::Vector3d::UnitY()) *
         Eigen::AngleAxisd(M_PI, Eigen::Vector3d::UnitX());
 
+    // Figure out what the tip orientation is for the URDF / planning group in use
+    auto all_zero_state = moveit::core::RobotState(robot_model_);
+    all_zero_state.setVariablePositions({ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 });
+    const auto rostool_orientation =
+        Eigen::Quaterniond(all_zero_state.getGlobalLinkTransform(getTipFrame()).linear());
+
+    // Store the (purely rotational) transformation converting between the two orientations.
     T_rostool_pendanttool_.translation().setZero();
     T_rostool_pendanttool_.linear() =
         Eigen::Matrix3d(rostool_orientation.inverse() * pendanttool_orientation);

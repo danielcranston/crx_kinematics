@@ -87,9 +87,9 @@ class CRXKinematicsPlugin : public kinematics::KinematicsBase
     double base_j1_height_;
 
     // Transform relating the URDFs "flange" frame orientation convention to the "Pendant" /
-    // "Abbes and Poisson" convention. The latter is expected by CRXRobot::ik, hence the need for
-    // conversion.
-    Eigen::Isometry3d T_rostool_pendanttool_;
+    // "Abbes and Poisson" convention. The latter is expected by CRXRobot::ik and CRXRobot::fk,
+    // hence the need for conversion.
+    Eigen::Isometry3d T_rostool_pendanttool_ = Eigen::Isometry3d::Identity();
 
     bool extract_joint_limits_and_tcp_orientation();
     bool respects_joint_limits(const std::vector<double>& solution) const;
