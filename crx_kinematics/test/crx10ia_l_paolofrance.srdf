@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<robot name="crx10ia_l">
+    <group name="manipulator">
+        <chain base_link="base_link" tip_link="tcp"/>
+    </group>
+    <group_state name="home" group="manipulator">
+        <joint name="J1" value="0"/>
+        <joint name="J2" value="0"/>
+        <joint name="J3" value="0"/>
+        <joint name="J4" value="0"/>
+        <joint name="J5" value="0"/>
+        <joint name="J6" value="0"/>
+    </group_state>
+    <disable_collisions link1="J1_link" link2="J2_link" reason="Adjacent"/>
+    <disable_collisions link1="J1_link" link2="J3_link" reason="Never"/>
+    <disable_collisions link1="J1_link" link2="base_link" reason="Adjacent"/>
+    <disable_collisions link1="J2_link" link2="J3_link" reason="Adjacent"/>
+    <disable_collisions link1="J2_link" link2="J4_link" reason="Never"/>
+    <disable_collisions link1="J3_link" link2="J4_link" reason="Adjacent"/>
+    <disable_collisions link1="J3_link" link2="J5_link" reason="Never"/>
+    <disable_collisions link1="J3_link" link2="J6_link" reason="Never"/>
+    <disable_collisions link1="J3_link" link2="base_link" reason="Never"/>
+    <disable_collisions link1="J4_link" link2="J5_link" reason="Adjacent"/>
+    <disable_collisions link1="J4_link" link2="J6_link" reason="Never"/>
+    <disable_collisions link1="J5_link" link2="J6_link" reason="Adjacent"/>
+</robot>

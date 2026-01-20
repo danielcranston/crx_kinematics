@@ -38,7 +38,7 @@ geometry_msgs::msg::Pose do_fk(const crx_kinematics::CRXKinematicsPlugin& plugin
                                const std::vector<double>& joint_values)
 {
     std::vector<geometry_msgs::msg::Pose> fk_poses;
-    plugin.getPositionFK({ "flange" }, joint_values, fk_poses);
+    plugin.getPositionFK({ plugin.getTipFrame() }, joint_values, fk_poses);
     return fk_poses[0];
 }
 
@@ -88,13 +88,14 @@ std::shared_ptr<moveit::core::RobotModel> load_crx_robot_model(const std::string
     return std::make_shared<moveit::core::RobotModel>(urdf_model, srdf_model);
 }
 
-crx_kinematics::CRXKinematicsPlugin make_plugin(const std::string& robot_name)
+crx_kinematics::CRXKinematicsPlugin make_plugin(const std::string& robot_name,
+                                                const std::string tip_frame = "flange")
 {
     auto node = rclcpp::Node::make_shared("test_crx_kinematics_plugin");
     auto robot_model = load_crx_robot_model(robot_name);
 
     auto plugin = crx_kinematics::CRXKinematicsPlugin();
-    if (!plugin.initialize(node, *robot_model, "manipulator", "base_link", { "flange" }, 0.0))
+    if (!plugin.initialize(node, *robot_model, "manipulator", "base_link", { tip_frame }, 0.0))
     {
         throw std::runtime_error("Could not initialize plugin for " + robot_name);
     }
@@ -131,14 +132,13 @@ void assert_fk_ik_round_trip(const crx_kinematics::CRXKinematicsPlugin& plugin,
 }
 
 void assert_all_zeros_pose(const crx_kinematics::CRXKinematicsPlugin& plugin,
-                           const Eigen::Vector3d& expected_position)
+                           const Eigen::Vector3d& expected_position,
+                           const Eigen::Quaterniond& expected_orientation)
 {
     const std::vector<double> all_zeros = { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
 
     const geometry_msgs::msg::Pose fk_pose = do_fk(plugin, all_zeros);
     const auto [position, orientation] = pose_to_eigen(fk_pose);
-
-    const auto expected_orientation = Eigen::Quaterniond(/*w=*/1.0, 0.0, 0.0, 0.0);
 
     ASSERT_NEAR((position - expected_position).norm(), 0.0, 1e-6);
     ASSERT_NEAR(orientation.angularDistance(expected_orientation), 0.0, 1e-6);
@@ -146,11 +146,14 @@ void assert_all_zeros_pose(const crx_kinematics::CRXKinematicsPlugin& plugin,
     assert_fk_ik_round_trip(plugin, all_zeros);
 }
 
+// From the Fanuc official driver / descriptions.
+// https://github.com/FANUC-CORPORATION/fanuc_description/blob/18d7c16/fanuc_crx_description/robot/crx10ia.urdf.xacro
 TEST(CrxKinematicsPluginTest, test_plugin_crx10ia)
 {
-    const auto plugin = make_plugin("crx10ia");
+    const auto plugin = make_plugin("crx10ia", "flange");
     assert_no_ik_for_unreachable_pose(plugin);
-    assert_all_zeros_pose(plugin, Eigen::Vector3d(0.7, -0.15, 0.245 + 0.54));
+    assert_all_zeros_pose(
+        plugin, Eigen::Vector3d(0.7, -0.15, 0.245 + 0.54), Eigen::Quaterniond::Identity());
     for (int i = 0; i < 1000; ++i)
     {
         const auto joint_values = generate_random_joint_values();
@@ -159,11 +162,14 @@ TEST(CrxKinematicsPluginTest, test_plugin_crx10ia)
     }
 }
 
+// From the Fanuc official driver / descriptions.
+// https://github.com/FANUC-CORPORATION/fanuc_description/blob/18d7c16/fanuc_crx_description/robot/crx30ia.urdf.xacro
 TEST(CrxKinematicsPluginTest, test_plugin_crx30ia)
 {
-    const auto plugin = make_plugin("crx30ia");
+    const auto plugin = make_plugin("crx30ia", "flange");
     assert_no_ik_for_unreachable_pose(plugin);
-    assert_all_zeros_pose(plugin, Eigen::Vector3d(0.93, -0.185, 0.37 + 0.95));
+    assert_all_zeros_pose(
+        plugin, Eigen::Vector3d(0.93, -0.185, 0.37 + 0.95), Eigen::Quaterniond::Identity());
     for (int i = 0; i < 1000; ++i)
     {
         const auto joint_values = generate_random_joint_values();
@@ -172,6 +178,22 @@ TEST(CrxKinematicsPluginTest, test_plugin_crx30ia)
     }
 }
 
+// Custom URDF/SRDF with kinematic structure and tip frame differing from the offical ones.
+// https://github.com/paolofrance/ros2_fanuc_interface/blob/c673a0d/crx_moveit_config/crx10ia_l_moveit_config/config/crx10ia_l.urdf.xacro
+TEST(CrxKinematicsPluginTest, test_plugin_crx10ia_l_paolofrance)
+{
+    const auto plugin = make_plugin("crx10ia_l_paolofrance", "tcp");
+    assert_no_ik_for_unreachable_pose(plugin);
+    assert_all_zeros_pose(plugin,
+                          Eigen::Vector3d(0.7, -0.15, 0.245 + 0.71),
+                          Eigen::Quaterniond(/*w=*/0.0, 0.707107, 0.0, 0.707107));
+    for (int i = 0; i < 1000; ++i)
+    {
+        const auto joint_values = generate_random_joint_values();
+        // print(joint_values);
+        assert_fk_ik_round_trip(plugin, joint_values);
+    }
+}
 int main(int argc, char** argv)
 {
     rclcpp::init(0, nullptr);
