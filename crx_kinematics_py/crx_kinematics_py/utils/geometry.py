@@ -1,5 +1,5 @@
 import numpy as np
-import scipy
+import scipy.optimize
 
 
 def isometry_inv(T):

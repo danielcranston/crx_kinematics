@@ -13,7 +13,7 @@ jobs:
       image: ${{ matrix.os }}
     strategy:
       matrix:
-        os: ["ros:jazzy-ros-base-noble", "ros:kilted-ros-base-noble"]
+        os: ["ros:humble-ros-base-jammy", "ros:jazzy-ros-base-noble", "ros:kilted-ros-base-noble"]
       fail-fast: false
 
     steps:

@@ -3,8 +3,14 @@
 #include <algorithm>
 #include <ranges>
 
+#if RCLCPP_VERSION_GTE(28, 1, 0)  // Jazzy or newer
 #include <moveit/robot_model/robot_model.hpp>
 #include <moveit/robot_state/robot_state.hpp>
+#else
+#include <moveit/robot_model/robot_model.h>
+#include <moveit/robot_state/robot_state.h>
+#endif
+
 #include <pluginlib/class_list_macros.hpp>
 #include <tf2_eigen/tf2_eigen.hpp>
 
@@ -12,8 +18,7 @@ namespace crx_kinematics
 {
 namespace
 {
-const auto LOGGER = []() { return moveit::getLogger("crx_kinematics"); };
-
+auto const LOGGER = rclcpp::get_logger("pick_ik");
 }  // namespace
 
 bool CRXKinematicsPlugin::initialize(rclcpp::Node::SharedPtr const& /*node*/,
@@ -27,7 +32,7 @@ bool CRXKinematicsPlugin::initialize(rclcpp::Node::SharedPtr const& /*node*/,
 
     if (tip_frames.size() != 1)
     {
-        RCLCPP_INFO(LOGGER(), "Only 1 tip frame is supported. Model has '%lu", tip_frames.size());
+        RCLCPP_INFO(LOGGER, "Only 1 tip frame is supported. Model has '%lu", tip_frames.size());
         return false;
     }
 
@@ -35,14 +40,14 @@ bool CRXKinematicsPlugin::initialize(rclcpp::Node::SharedPtr const& /*node*/,
 
     joint_names_ = jmg->getJointModelNames();
     link_names_.push_back(getTipFrame());
-    RCLCPP_INFO(LOGGER(), "model_name: '%s'", robot_model.getName().c_str());
+    RCLCPP_INFO(LOGGER, "model_name: '%s'", robot_model.getName().c_str());
 
-    RCLCPP_INFO(LOGGER(), "model_frame: '%s'", robot_model.getModelFrame().c_str());
-    RCLCPP_INFO(LOGGER(), "tip_frame: '%s'", getTipFrame().c_str());
-    RCLCPP_INFO(LOGGER(), "base_frame: '%s'", base_frame_.c_str());
+    RCLCPP_INFO(LOGGER, "model_frame: '%s'", robot_model.getModelFrame().c_str());
+    RCLCPP_INFO(LOGGER, "tip_frame: '%s'", getTipFrame().c_str());
+    RCLCPP_INFO(LOGGER, "base_frame: '%s'", base_frame_.c_str());
     for (const auto& name : joint_names_)
     {
-        RCLCPP_DEBUG(LOGGER(), "joint name: '%s'", name.c_str());
+        RCLCPP_DEBUG(LOGGER, "joint name: '%s'", name.c_str());
     }
 
     std::map<std::string, std::pair<crx_kinematics::RobotNameEnum, double>> model_map = {
@@ -60,7 +65,7 @@ bool CRXKinematicsPlugin::initialize(rclcpp::Node::SharedPtr const& /*node*/,
     }
     else
     {
-        RCLCPP_ERROR(LOGGER(), "Unexpected model name: '%s'", robot_model.getName().c_str());
+        RCLCPP_ERROR(LOGGER, "Unexpected model name: '%s'", robot_model.getName().c_str());
         return false;
     }
 
@@ -120,7 +125,7 @@ bool CRXKinematicsPlugin::DoIK(const geometry_msgs::msg::Pose& ik_pose,
         }
     }
 
-    RCLCPP_DEBUG(LOGGER(), "solutions: %lu->%lu", ik_solutions.size(), valid_ik_solutions.size());
+    RCLCPP_DEBUG(LOGGER, "solutions: %lu->%lu", ik_solutions.size(), valid_ik_solutions.size());
 
     if (valid_ik_solutions.empty())
     {
@@ -172,7 +177,7 @@ bool CRXKinematicsPlugin::extract_joint_limits_and_tcp_orientation()
 
     if (joints_traversed != 6)
     {
-        RCLCPP_ERROR(LOGGER(), "Expected to find 6 revolute joints. Found %i", joints_traversed);
+        RCLCPP_ERROR(LOGGER, "Expected to find 6 revolute joints. Found %i", joints_traversed);
         return false;
     }
 
@@ -296,14 +301,14 @@ bool CRXKinematicsPlugin::getPositionFK(const std::vector<std::string>& link_nam
 {
     if (!(link_names.size() == 1 && link_names[0] == getTipFrame()))
     {
-        RCLCPP_ERROR(LOGGER(),
+        RCLCPP_ERROR(LOGGER,
                      "This plugin only supports looking up FK for the tip frame ('%s')",
                      getTipFrame().c_str());
         return false;
     }
     if (joint_angles.size() != 6)
     {
-        RCLCPP_ERROR(LOGGER(), "Expected 6 joint angles for FK, but got %lu", joint_angles.size());
+        RCLCPP_ERROR(LOGGER, "Expected 6 joint angles for FK, but got %lu", joint_angles.size());
         return false;
     }
 
