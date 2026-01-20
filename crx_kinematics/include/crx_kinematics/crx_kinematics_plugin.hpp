@@ -1,6 +1,11 @@
 #pragma once
-#include <moveit/kinematics_base/kinematics_base.hpp>
+#include <rclcpp/version.h>
 
+#if RCLCPP_VERSION_GTE(28, 1, 0)  // Jazzy or newer
+#include <moveit/kinematics_base/kinematics_base.hpp>
+#else
+#include <moveit/kinematics_base/kinematics_base.h>
+#endif
 #include "crx_kinematics/robot.hpp"
 
 namespace crx_kinematics

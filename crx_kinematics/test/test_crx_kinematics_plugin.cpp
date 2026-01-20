@@ -4,10 +4,16 @@
 #include <sstream>
 
 #include <gtest/gtest.h>
-#include <moveit/utils/robot_model_test_utils.hpp>
 #include <rclcpp/rclcpp.hpp>
+#include <rclcpp/version.h>
 #include <tf2_eigen/tf2_eigen.hpp>
 #include <urdf_parser/urdf_parser.h>
+
+#if RCLCPP_VERSION_GTE(28, 1, 0)  // Jazzy or newer
+#include <moveit/utils/robot_model_test_utils.hpp>
+#else
+#include <moveit/utils/robot_model_test_utils.h>
+#endif
 
 #include "crx_kinematics/crx_kinematics_plugin.hpp"
 
