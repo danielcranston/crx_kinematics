@@ -10,10 +10,16 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container:
-      image: ${{ matrix.os }}
+      image: ${{ matrix.distro }}
     strategy:
       matrix:
-        os: ["ros:humble-ros-base-jammy", "ros:jazzy-ros-base-noble", "ros:kilted-ros-base-noble"]
+        distro:
+          [
+            ros:humble-ros-base-jammy,
+            ros:jazzy-ros-base-noble,
+            ros:kilted-ros-base-noble,
+            ros:rolling-ros-base-noble,
+          ]
       fail-fast: false
 
     steps:
