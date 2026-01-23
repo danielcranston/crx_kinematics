@@ -1,27 +1,17 @@
 name: ROS CI
+# https://github.com/orgs/community/discussions/52616#discussioncomment-9364532
 
 on:
-  push:
-    branches: ["**"]
-  pull_request:
-    branches: ["**"]
-
+  workflow_call:
+    inputs:
+      docker_image:
+        required: true
+        type: string
 jobs:
   build:
     runs-on: ubuntu-latest
     container:
-      image: ${{ matrix.distro }}
-    strategy:
-      matrix:
-        distro:
-          [
-            ros:humble-ros-base-jammy,
-            ros:jazzy-ros-base-noble,
-            ros:kilted-ros-base-noble,
-            ros:rolling-ros-base-noble,
-          ]
-      fail-fast: false
-
+      image: ${{ inputs.docker_image }}
     steps:
       - uses: actions/checkout@v6
         with:
