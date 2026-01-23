@@ -1,5 +1,14 @@
 # crx_kinematics
 
+<div align="center">
+
+[![Humble](https://github.com/danielcranston/crx_kinematics/actions/workflows/humble.yml/badge.svg?branch=master)](https://github.com/danielcranston/crx_kinematics/actions/workflows/humble.yml)
+[![Jazzy](https://github.com/danielcranston/crx_kinematics/actions/workflows/jazzy.yml/badge.svg?branch=master)](https://github.com/danielcranston/crx_kinematics/actions/workflows/jazzy.yml)
+[![Kilted](https://github.com/danielcranston/crx_kinematics/actions/workflows/kilted.yml/badge.svg?branch=master)](https://github.com/danielcranston/crx_kinematics/actions/workflows/kilted.yml)
+[![Rolling](https://github.com/danielcranston/crx_kinematics/actions/workflows/rolling.yml/badge.svg?branch=master)](https://github.com/danielcranston/crx_kinematics/actions/workflows/rolling.yml)
+
+</div>
+
 This repo hosts C++ and Python code implementing FK/IK for the Fanuc CRX series. The implementation closely follows _[Geometric Approach for Inverse Kinematics of the FANUC CRX Collaborative Robot](https://www.mdpi.com/2218-6581/13/6/91)_ by Abbes and Poisson (2024).
 
 <img src="readme_images/ik.gif">
