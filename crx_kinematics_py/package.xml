@@ -2,9 +2,9 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>crx_kinematics_py</name>
-  <version>0.0.0</version>
+  <version>1.0.0</version>
   <description>Python implementation of FK/IK for Fanuc CRX series cobots</description>
-  <maintainer email="cranston.daniel@gmail.com">Daniel</maintainer>
+  <maintainer email="cranston.daniel@gmail.com">Daniel Cranston</maintainer>
   <license>MIT</license>
 
   <depend>geometry_msgs</depend>
