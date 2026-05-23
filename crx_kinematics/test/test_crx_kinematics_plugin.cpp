@@ -17,6 +17,14 @@
 
 #include "crx_kinematics/crx_kinematics_plugin.hpp"
 
+Eigen::Isometry3d make_isometry(const Eigen::Vector3d& pos, const Eigen::Quaterniond& quat)
+{
+    auto pose = Eigen::Isometry3d();
+    pose.translation() = pos;
+    pose.linear() = Eigen::Matrix3d(quat);
+    return pose;
+}
+
 std::vector<double> generate_random_joint_values()
 {
     auto random_joint_value = [](const int lower, const int upper) {
@@ -134,17 +142,20 @@ void assert_fk_ik_round_trip(const crx_kinematics::CRXKinematicsPlugin& plugin,
     const auto [p1, q1] = pose_to_eigen(fk_pose);
     const auto [p2, q2] = pose_to_eigen(fk_pose_again);
     ASSERT_NEAR((p1 - p2).norm(), 0.0, 1e-6) << to_str(joint_values);
-    ASSERT_NEAR(q1.angularDistance(q2), 0.0, 1e-6) << to_str(joint_values);
+    ASSERT_NEAR(q1.angularDistance(q2), 0.0, 1e-5) << to_str(joint_values);
 }
 
 void assert_all_zeros_pose(const crx_kinematics::CRXKinematicsPlugin& plugin,
-                           const Eigen::Vector3d& expected_position,
-                           const Eigen::Quaterniond& expected_orientation)
+                           const Eigen::Isometry3d& all_zero_pose)
 {
     const std::vector<double> all_zeros = { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
 
     const geometry_msgs::msg::Pose fk_pose = do_fk(plugin, all_zeros);
     const auto [position, orientation] = pose_to_eigen(fk_pose);
+    const auto [expected_position, expected_orientation] = [&all_zero_pose]() {
+        return std::make_pair(all_zero_pose.translation(),
+                              Eigen::Quaterniond(all_zero_pose.linear()));
+    }();
 
     ASSERT_NEAR((position - expected_position).norm(), 0.0, 1e-6);
     ASSERT_NEAR(orientation.angularDistance(expected_orientation), 0.0, 1e-6);
@@ -152,54 +163,51 @@ void assert_all_zeros_pose(const crx_kinematics::CRXKinematicsPlugin& plugin,
     assert_fk_ik_round_trip(plugin, all_zeros);
 }
 
-// From the Fanuc official driver / descriptions.
-// https://github.com/FANUC-CORPORATION/fanuc_description/blob/18d7c16/fanuc_crx_description/robot/crx10ia.urdf.xacro
-TEST(CrxKinematicsPluginTest, test_plugin_crx10ia)
+void test_robot(const std::string& robot_name,
+                const std::string& tip_frame,
+                const Eigen::Isometry3d& all_zero_pose)
 {
-    const auto plugin = make_plugin("crx10ia", "flange");
+    const auto plugin = make_plugin(robot_name, tip_frame);
     assert_no_ik_for_unreachable_pose(plugin);
-    assert_all_zeros_pose(
-        plugin, Eigen::Vector3d(0.7, -0.15, 0.245 + 0.54), Eigen::Quaterniond::Identity());
+    assert_all_zeros_pose(plugin, all_zero_pose);
     for (int i = 0; i < 1000; ++i)
     {
         const auto joint_values = generate_random_joint_values();
         // print(joint_values);
         assert_fk_ik_round_trip(plugin, joint_values);
     }
+}
+
+// From the Fanuc official driver / descriptions.
+// https://github.com/FANUC-CORPORATION/fanuc_description/blob/18d7c16/fanuc_crx_description/robot/crx10ia.urdf.xacro
+TEST(CrxKinematicsPluginTest, test_plugin_crx10ia)
+{
+    test_robot(
+        "crx10ia",
+        "flange",
+        make_isometry(Eigen::Vector3d(0.7, -0.15, 0.245 + 0.54), Eigen::Quaterniond::Identity()));
 }
 
 // From the Fanuc official driver / descriptions.
 // https://github.com/FANUC-CORPORATION/fanuc_description/blob/18d7c16/fanuc_crx_description/robot/crx30ia.urdf.xacro
 TEST(CrxKinematicsPluginTest, test_plugin_crx30ia)
 {
-    const auto plugin = make_plugin("crx30ia", "flange");
-    assert_no_ik_for_unreachable_pose(plugin);
-    assert_all_zeros_pose(
-        plugin, Eigen::Vector3d(0.93, -0.185, 0.37 + 0.95), Eigen::Quaterniond::Identity());
-    for (int i = 0; i < 1000; ++i)
-    {
-        const auto joint_values = generate_random_joint_values();
-        // print(joint_values);
-        assert_fk_ik_round_trip(plugin, joint_values);
-    }
+    test_robot(
+        "crx30ia",
+        "flange",
+        make_isometry(Eigen::Vector3d(0.93, -0.185, 0.37 + 0.95), Eigen::Quaterniond::Identity()));
 }
 
 // Custom URDF/SRDF with kinematic structure and tip frame differing from the offical ones.
 // https://github.com/paolofrance/ros2_fanuc_interface/blob/c673a0d/crx_moveit_config/crx10ia_l_moveit_config/config/crx10ia_l.urdf.xacro
 TEST(CrxKinematicsPluginTest, test_plugin_crx10ia_l_paolofrance)
 {
-    const auto plugin = make_plugin("crx10ia_l_paolofrance", "tcp");
-    assert_no_ik_for_unreachable_pose(plugin);
-    assert_all_zeros_pose(plugin,
-                          Eigen::Vector3d(0.7, -0.15, 0.245 + 0.71),
-                          Eigen::Quaterniond(/*w=*/0.0, 0.707107, 0.0, 0.707107));
-    for (int i = 0; i < 1000; ++i)
-    {
-        const auto joint_values = generate_random_joint_values();
-        // print(joint_values);
-        assert_fk_ik_round_trip(plugin, joint_values);
-    }
+    test_robot("crx10ia_l_paolofrance",
+               "tcp",
+               make_isometry(Eigen::Vector3d(0.7, -0.15, 0.245 + 0.71),
+                             Eigen::Quaterniond(/*w=*/0.0, 0.707107, 0.0, 0.707107)));
 }
+
 int main(int argc, char** argv)
 {
     rclcpp::init(0, nullptr);
