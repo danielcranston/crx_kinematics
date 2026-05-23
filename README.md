@@ -57,7 +57,7 @@ joint_solutions, debug_data = robot.ik(pose)
 
 ## Moveit 2 Kinematics Plugin
 
-To use the Moveit 2 Kinematics plugin, build the `crx_kinematics` package in your workspace, then edit the [kinematics.yaml](https://github.com/FANUC-CORPORATION/fanuc_driver/blob/eb3093c/fanuc_moveit_config/config/kinematics.yaml#L7) file of your Moveit 2 config package to use the plugin:
+To use the Moveit 2 Kinematics plugin, build the `crx_kinematics` package in your workspace, then edit the [kinematics.yaml](https://github.com/FANUC-CORPORATION/fanuc_driver/blob/v2.0.0/fanuc_moveit_config/config/kinematics.yaml#L7) file of your Moveit 2 config package to use the plugin:
 
 ```diff
 manipulator:
@@ -67,7 +67,7 @@ manipulator:
 
 The plugin also works with custom URDFs, provided their base and tip frames, as well as the name of the URDF, match the equivalent URDF from Fanuc.
 
-Note that the Fanuc official driver does not yet support ROS 2 Jazzy/Kilted, so unless you're on Humble, using the _controllers_ provided in the Fanuc driver repo (e.g. `ScaledJointTrajectoryController`) will not work out of the box. Hopefully Fanuc will add support for Jazzy/Kilted soon.
+Note that, while the code in this repo supports all active ROS distros, the official Fanuc driver only supports Humble and Jazzy. If you want to use the _controllers_ provided in the Fanuc driver repo (e.g. `ScaledJointTrajectoryController`) together with this plugin, you are restricted to using a distro supported by the Fanuc driver repo.
 
 # Cloning and building
 
