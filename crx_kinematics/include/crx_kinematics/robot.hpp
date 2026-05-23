@@ -7,6 +7,7 @@ namespace crx_kinematics
 
 enum class RobotNameEnum
 {
+    crx3ia = -1,
     crx5ia = 0,
     crx10ia,
     crx10ia_l,

@@ -51,6 +51,7 @@ bool CRXKinematicsPlugin::initialize(rclcpp::Node::SharedPtr const& /*node*/,
     }
 
     std::map<std::string, std::pair<crx_kinematics::RobotNameEnum, double>> model_map = {
+        { "crx3ia", { crx_kinematics::RobotNameEnum::crx3ia, 0.161 } },
         { "crx5ia", { crx_kinematics::RobotNameEnum::crx5ia, 0.185 } },
         { "crx10ia", { crx_kinematics::RobotNameEnum::crx10ia, 0.245 } },
         { "crx10ia_l", { crx_kinematics::RobotNameEnum::crx10ia_l, 0.245 } },

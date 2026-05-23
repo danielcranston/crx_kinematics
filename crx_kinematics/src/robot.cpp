@@ -29,6 +29,11 @@ get_dh_params(const double l_2, const double l_4, const double l_5, const double
     return { L1, L2, L3, L4, L5, L6 };
 }
 
+std::array<DHParams, 6> crx3ia_params()
+{
+    return get_dh_params(0.28, 0.28, .111, 0.123);
+}
+
 std::array<DHParams, 6> crx5ia_params()
 {
     return get_dh_params(0.41, 0.43, 0.13, 0.145);
@@ -58,6 +63,8 @@ std::array<DHParams, 6> get_dh_params(const RobotNameEnum& robot_name)
 {
     switch (robot_name)
     {
+        case RobotNameEnum::crx3ia:
+            return crx3ia_params();
         case RobotNameEnum::crx5ia:
             return crx5ia_params();
         case RobotNameEnum::crx10ia:

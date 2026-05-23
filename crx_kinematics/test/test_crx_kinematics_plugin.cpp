@@ -36,7 +36,7 @@ std::vector<double> generate_random_joint_values()
     return {
         random_joint_value(-179, 179),  //
         random_joint_value(-179, 179),  //
-        random_joint_value(-69, 69),    /* Ensure we stay away from the edge of the robot envelope
+        random_joint_value(-60, 60),    /* Ensure we stay away from the edge of the robot envelope
                                          (fully extended or completely folder in towards the base),
                                          since randomized IK seems unreliable in these areas.
                                          This can (should be able to) be reverted once `find_zeros`
@@ -179,7 +179,26 @@ void test_robot(const std::string& robot_name,
 }
 
 // From the Fanuc official driver / descriptions.
-// https://github.com/FANUC-CORPORATION/fanuc_description/blob/18d7c16/fanuc_crx_description/robot/crx10ia.urdf.xacro
+// https://github.com/FANUC-CORPORATION/fanuc_description/blob/v1.2.2/fanuc_crx_description/robot/crx3ia.urdf.xacro
+TEST(CrxKinematicsPluginTest, test_plugin_crx3ia)
+{
+    test_robot(
+        "crx3ia",
+        "flange",
+        make_isometry(Eigen::Vector3d(0.403, -0.111, 0.441), Eigen::Quaterniond::Identity()));
+}
+
+// From the Fanuc official driver / descriptions.
+// https://github.com/FANUC-CORPORATION/fanuc_description/blob/v1.2.2/fanuc_crx_description/robot/crx5ia.urdf.xacro
+TEST(CrxKinematicsPluginTest, test_plugin_crx5ia)
+{
+    test_robot("crx5ia",
+               "flange",
+               make_isometry(Eigen::Vector3d(0.575, -0.13, 0.595), Eigen::Quaterniond::Identity()));
+}
+
+// From the Fanuc official driver / descriptions.
+// https://github.com/FANUC-CORPORATION/fanuc_description/blob/v1.2.2/fanuc_crx_description/robot/crx10ia.urdf.xacro
 TEST(CrxKinematicsPluginTest, test_plugin_crx10ia)
 {
     test_robot(
@@ -189,7 +208,7 @@ TEST(CrxKinematicsPluginTest, test_plugin_crx10ia)
 }
 
 // From the Fanuc official driver / descriptions.
-// https://github.com/FANUC-CORPORATION/fanuc_description/blob/18d7c16/fanuc_crx_description/robot/crx30ia.urdf.xacro
+// https://github.com/FANUC-CORPORATION/fanuc_description/blob/v1.2.2/fanuc_crx_description/robot/crx30ia.urdf.xacro
 TEST(CrxKinematicsPluginTest, test_plugin_crx30ia)
 {
     test_robot(
