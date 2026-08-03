@@ -10,8 +10,12 @@
 
 #if RCLCPP_VERSION_GTE(28, 1, 0)  // Jazzy or newer
 #include <moveit/robot_state/robot_state.hpp>
+#include <moveit/collision_detection/collision_env.hpp>
+#include <moveit/collision_detection/collision_matrix.hpp>
 #else
 #include <moveit/robot_state/robot_state.h>
+#include <moveit/collision_detection/collision_env.h>
+#include <moveit/collision_detection/collision_matrix.h>
 #endif
 
 #include "crx_kinematics/robot.hpp"
@@ -41,6 +45,22 @@ class CRXKinematicsPlugin : public kinematics::KinematicsBase
      * A scale-invariant alternative to manipulability(), analogous to TRAC-IK's Manip2.
      */
     double inverse_condition_number(const std::vector<double>& joint_values) const;
+
+    /**
+     * @brief Whether the solution puts the robot in self-collision, respecting the SRDF's
+     * disabled collision pairs. Always false if self_collision_check is off.
+     *
+     * Note this is *self*-collision only. Collision with the environment needs a PlanningScene,
+     * which a KinematicsBase plugin has no access to; that check belongs in the IKCallbackFn
+     * that MoveIt already passes to searchPositionIK, and is applied as a filter in DoIK.
+     */
+    bool is_self_colliding(const std::vector<double>& joint_values) const;
+
+    /**
+     * @brief Minimum distance between any two non-allowed link pairs, in metres. Negative when
+     * penetrating. Requires the FCL detector: Bullet's distanceSelf is a stub in MoveIt.
+     */
+    double self_clearance(const std::vector<double>& joint_values) const;
 
     bool DoIK(const geometry_msgs::msg::Pose& ik_pose,
               std::vector<double>& solution,
@@ -113,6 +133,8 @@ class CRXKinematicsPlugin : public kinematics::KinematicsBase
         manip1,
         /// Maximise sigma_min / sigma_max. Analogous to TRAC-IK's Manip2.
         manip2,
+        /// Maximise distance to self-collision. FCL only; Bullet cannot answer distance queries.
+        clearance,
     };
 
   private:
@@ -145,6 +167,12 @@ class CRXKinematicsPlugin : public kinematics::KinematicsBase
     /// Weight on L1 seed distance, subtracted from the manipulability score. 0 disables.
     double seed_bias_ = 0.0;
 
+    /// Reject solutions in self-collision. Off by default: it costs a collision query per
+    /// candidate, and callers that already supply a state-validity IKCallbackFn get this anyway.
+    bool check_self_collision_ = false;
+    collision_detection::CollisionEnvPtr collision_env_;
+    collision_detection::AllowedCollisionMatrix acm_;
+
     bool read_parameters(const rclcpp::Node::SharedPtr& node);
 
     // These take an already-constructed RobotState because building one costs far more than the
@@ -155,6 +183,10 @@ class CRXKinematicsPlugin : public kinematics::KinematicsBase
                           const std::vector<double>& joint_values) const;
     double inverse_condition_number(moveit::core::RobotState& state,
                                     const std::vector<double>& joint_values) const;
+    bool is_self_colliding(moveit::core::RobotState& state,
+                           const std::vector<double>& joint_values) const;
+    double self_clearance(moveit::core::RobotState& state,
+                          const std::vector<double>& joint_values) const;
     bool extract_joint_limits_and_tcp_orientation();
     double score(moveit::core::RobotState& state,
                  const std::vector<double>& solution,

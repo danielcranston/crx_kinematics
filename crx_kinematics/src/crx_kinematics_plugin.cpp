@@ -9,9 +9,13 @@
 #if RCLCPP_VERSION_GTE(28, 1, 0)  // Jazzy or newer
 #include <moveit/robot_model/robot_model.hpp>
 #include <moveit/robot_state/robot_state.hpp>
+#include <moveit/collision_detection_fcl/collision_env_fcl.hpp>
+#include <moveit/collision_detection_bullet/collision_env_bullet.hpp>
 #else
 #include <moveit/robot_model/robot_model.h>
 #include <moveit/robot_state/robot_state.h>
+#include <moveit/collision_detection_fcl/collision_env_fcl.h>
+#include <moveit/collision_detection_bullet/collision_env_bullet.h>
 #endif
 
 #include <pluginlib/class_list_macros.hpp>
@@ -157,16 +161,72 @@ bool CRXKinematicsPlugin::read_parameters(const rclcpp::Node::SharedPtr& node)
     {
         solution_selection_ = SolutionSelection::manip2;
     }
+    else if (selection == "clearance")
+    {
+        solution_selection_ = SolutionSelection::clearance;
+    }
     else
     {
         RCLCPP_ERROR(LOGGER,
-                     "Unknown solution_selection '%s'. Expected distance, manip1 or manip2",
+                     "Unknown solution_selection '%s'. Expected distance, manip1, manip2 or "
+                     "clearance",
                      selection.c_str());
         return false;
     }
 
     min_manipulability_ = get_param<double>(node, prefix + "min_manipulability", 0.0);
     seed_bias_ = get_param<double>(node, prefix + "seed_bias", 0.0);
+
+    check_self_collision_ = get_param<bool>(node, prefix + "self_collision_check", false);
+    const std::string detector = get_param<std::string>(node, prefix + "collision_detector", "fcl");
+
+    if (detector != "fcl" && detector != "bullet")
+    {
+        RCLCPP_ERROR(
+            LOGGER, "Unknown collision_detector '%s'. Expected fcl or bullet", detector.c_str());
+        return false;
+    }
+
+    // Bullet's distanceSelf() is an unimplemented stub in MoveIt (it logs and returns nothing),
+    // so clearance ranking is only possible with FCL. Fail loudly at startup rather than
+    // silently ranking every solution as equally clear.
+    if (solution_selection_ == SolutionSelection::clearance && detector != "fcl")
+    {
+        RCLCPP_ERROR(LOGGER,
+                     "solution_selection 'clearance' requires collision_detector 'fcl'. Bullet "
+                     "does not implement distance queries.");
+        return false;
+    }
+
+    if (check_self_collision_ || solution_selection_ == SolutionSelection::clearance)
+    {
+        if (detector == "bullet")
+        {
+            collision_env_ = std::make_shared<collision_detection::CollisionEnvBullet>(robot_model_);
+        }
+        else
+        {
+            collision_env_ = std::make_shared<collision_detection::CollisionEnvFCL>(robot_model_);
+        }
+
+        // Build the ACM from the SRDF's disabled pairs, the same set MoveIt Setup Assistant
+        // generates. Everything else defaults to "must be checked".
+        acm_ = collision_detection::AllowedCollisionMatrix(
+            robot_model_->getLinkModelNamesWithCollisionGeometry(), /*allowed=*/false);
+        for (const auto& pair : robot_model_->getSRDF()->getDisabledCollisionPairs())
+        {
+            acm_.setEntry(pair.link1_, pair.link2_, true);
+        }
+
+        if (robot_model_->getLinkModelNamesWithCollisionGeometry().empty())
+        {
+            RCLCPP_WARN(LOGGER,
+                        "Self-collision checking is enabled but the model has no collision "
+                        "geometry. Every solution will appear collision-free.");
+        }
+
+        RCLCPP_INFO(LOGGER, "Self-collision checking enabled using '%s'", detector.c_str());
+    }
 
     RCLCPP_INFO(LOGGER,
                 "solution_selection: '%s', min_manipulability: %.4g, seed_bias: %.4g",
@@ -242,17 +302,21 @@ bool CRXKinematicsPlugin::DoIK(const geometry_msgs::msg::Pose& ik_pose,
         return false;
     }
 
-    // Constructing a RobotState dominates the cost of the Jacobian metrics, so build one here and
-    // reuse it for every candidate. In distance mode it is never touched.
-    const bool needs_jacobian = solution_selection_ != SolutionSelection::distance;
+    // Constructing a RobotState dominates the cost of both the Jacobian and the collision queries,
+    // so build one here and reuse it for every candidate. In plain distance mode with no collision
+    // checking it is never touched.
+    const bool needs_state =
+        solution_selection_ != SolutionSelection::distance || check_self_collision_;
     moveit::core::RobotState state(robot_model_);
-    if (needs_jacobian)
+    if (needs_state)
     {
         state.setToDefaultValues();
     }
 
     // Reject solutions that are too close to a singularity, if a floor has been configured.
-    if (min_manipulability_ > 0.0 && needs_jacobian)
+    const bool has_manipulability_metric = solution_selection_ == SolutionSelection::manip1 ||
+                                           solution_selection_ == SolutionSelection::manip2;
+    if (min_manipulability_ > 0.0 && has_manipulability_metric)
     {
         const auto too_singular = [this, &state](const std::vector<double>& ik_sol) {
             const double m = solution_selection_ == SolutionSelection::manip1 ?
@@ -270,19 +334,85 @@ bool CRXKinematicsPlugin::DoIK(const geometry_msgs::msg::Pose& ik_pose,
         }
     }
 
-    // Rank the remaining solutions. score() is written so that lower is always better, whichever
-    // metric is active, which keeps this a single min_element regardless of configuration.
-    solution = *std::ranges::min_element(
-        valid_ik_solutions,  // https://en.cppreference.com/w/cpp/algorithm/ranges/min_element.html
-        std::ranges::less{},
-        // Projection
-        [this, &state, &reference_joint_values](const auto& ik_sol) {
-            return score(state, ik_sol, reference_joint_values);
-        });
+    // Rank the candidates. score() is written so that lower is always better, whichever metric is
+    // active. Scores are computed once up front rather than as a sort projection, since a
+    // projection would be re-invoked O(n log n) times and each call may cost a Jacobian or a
+    // collision distance query.
+    std::vector<std::pair<double, std::size_t>> ranked;
+    ranked.reserve(valid_ik_solutions.size());
+    for (std::size_t i = 0; i < valid_ik_solutions.size(); ++i)
+    {
+        ranked.emplace_back(score(state, valid_ik_solutions[i], reference_joint_values), i);
+    }
+    std::ranges::sort(ranked);
 
-    error_code.val = moveit_msgs::msg::MoveItErrorCodes::SUCCESS;
+    // Self-collision is checked lazily, in rank order, so the common case costs one query rather
+    // than one per candidate. Note this deliberately runs *after* ranking: it is a feasibility
+    // filter, not a ranking term. Use solution_selection 'clearance' to rank by it instead.
+    for (const auto& [candidate_score, index] : ranked)
+    {
+        if (check_self_collision_ && is_self_colliding(state, valid_ik_solutions[index]))
+        {
+            continue;
+        }
 
-    return true;
+        solution = valid_ik_solutions[index];
+        error_code.val = moveit_msgs::msg::MoveItErrorCodes::SUCCESS;
+        return true;
+    }
+
+    RCLCPP_DEBUG(LOGGER, "Every IK solution was in self-collision");
+    error_code.val = moveit_msgs::msg::MoveItErrorCodes::NO_IK_SOLUTION;
+    return false;
+}
+
+bool CRXKinematicsPlugin::is_self_colliding(moveit::core::RobotState& state,
+                                            const std::vector<double>& joint_values) const
+{
+    if (!collision_env_)
+    {
+        return false;
+    }
+
+    state.setJointGroupPositions(jmg_, joint_values);
+    state.updateCollisionBodyTransforms();
+
+    collision_detection::CollisionRequest request;
+    request.distance = false;
+    collision_detection::CollisionResult result;
+    collision_env_->checkSelfCollision(request, result, state, acm_);
+
+    return result.collision;
+}
+
+double CRXKinematicsPlugin::self_clearance(moveit::core::RobotState& state,
+                                           const std::vector<double>& joint_values) const
+{
+    if (!collision_env_)
+    {
+        return 0.0;
+    }
+
+    state.setJointGroupPositions(jmg_, joint_values);
+    state.updateCollisionBodyTransforms();
+
+    return collision_env_->distanceSelf(state, acm_);
+}
+
+// Convenience overloads for external callers; see the note above the manipulability pair.
+
+bool CRXKinematicsPlugin::is_self_colliding(const std::vector<double>& joint_values) const
+{
+    moveit::core::RobotState state(robot_model_);
+    state.setToDefaultValues();
+    return is_self_colliding(state, joint_values);
+}
+
+double CRXKinematicsPlugin::self_clearance(const std::vector<double>& joint_values) const
+{
+    moveit::core::RobotState state(robot_model_);
+    state.setToDefaultValues();
+    return self_clearance(state, joint_values);
 }
 
 namespace
@@ -322,6 +452,8 @@ double CRXKinematicsPlugin::score(moveit::core::RobotState& state,
             return -manipulability(state, solution) + seed_bias_ * distance;
         case SolutionSelection::manip2:
             return -inverse_condition_number(state, solution) + seed_bias_ * distance;
+        case SolutionSelection::clearance:
+            return -self_clearance(state, solution) + seed_bias_ * distance;
     }
 
     return distance;  // Unreachable; keeps the compiler happy.

@@ -361,6 +361,67 @@ TEST(CrxKinematicsPluginTest, min_manipulability_filters_solutions)
     ASSERT_GT(solved, 0);
 }
 
+// The test URDFs have no collision geometry (upstream dropped it in 4899867), so these tests
+// verify the plumbing and the guard rails rather than real collision behaviour. Checking against
+// a model with geometry needs a fixture the repo does not currently have.
+TEST(CrxKinematicsPluginTest, self_collision_checking_does_not_break_round_trips)
+{
+    for (const std::string& detector : { "fcl", "bullet" })
+    {
+        const auto plugin = make_plugin(
+            "crx10ia",
+            "flange",
+            { kinematics_param("self_collision_check", rclcpp::ParameterValue(true)),
+              kinematics_param("collision_detector", rclcpp::ParameterValue(detector)) });
+
+        assert_no_ik_for_unreachable_pose(plugin);
+        for (int i = 0; i < 100; ++i)
+        {
+            const auto joint_values = generate_random_joint_values();
+            assert_fk_ik_round_trip(plugin, joint_values);
+            // No collision geometry in the test model, so nothing can ever be in collision.
+            ASSERT_FALSE(plugin.is_self_colliding(joint_values)) << to_str(joint_values);
+        }
+    }
+}
+
+// Bullet's distanceSelf is an unimplemented stub in MoveIt, so pairing it with clearance ranking
+// would silently score every solution identically. Initialization must reject the combination.
+TEST(CrxKinematicsPluginTest, clearance_selection_rejects_bullet)
+{
+    ASSERT_THROW(
+        make_plugin("crx10ia",
+                    "flange",
+                    { kinematics_param("solution_selection",
+                                       rclcpp::ParameterValue(std::string("clearance"))),
+                      kinematics_param("collision_detector",
+                                       rclcpp::ParameterValue(std::string("bullet"))) }),
+        std::runtime_error);
+}
+
+TEST(CrxKinematicsPluginTest, clearance_selection_still_returns_valid_solutions)
+{
+    const auto plugin = make_plugin(
+        "crx10ia",
+        "flange",
+        { kinematics_param("solution_selection", rclcpp::ParameterValue(std::string("clearance"))),
+          kinematics_param("collision_detector", rclcpp::ParameterValue(std::string("fcl"))) });
+
+    for (int i = 0; i < 100; ++i)
+    {
+        assert_fk_ik_round_trip(plugin, generate_random_joint_values());
+    }
+}
+
+TEST(CrxKinematicsPluginTest, unknown_collision_detector_fails_initialization)
+{
+    ASSERT_THROW(make_plugin("crx10ia",
+                             "flange",
+                             { kinematics_param("collision_detector",
+                                                rclcpp::ParameterValue(std::string("nonsense"))) }),
+                 std::runtime_error);
+}
+
 TEST(CrxKinematicsPluginTest, unknown_solution_selection_fails_initialization)
 {
     ASSERT_THROW(make_plugin("crx10ia",
